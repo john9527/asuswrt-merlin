@@ -2063,13 +2063,16 @@ int set_wltxpower()
 					else if (nvram_match(strcat_r(prefix, "nband", tmp), "1"))	// 5G
 					{
 #ifndef RTCONFIG_ENGINEERING_MODE
-						if (nvram_match("wl_dfs_enable","1"))
+						if (nvram_match(strcat_r(prefix, "country_code", tmp), "EU"))
 						{
-							if (!nvram_match(strcat_r(prefix2, "regrev", tmp2), "31"))
+							if (nvram_match("wl_dfs_enable","1"))
 							{
-								nvram_set(strcat_r(prefix, "country_rev", tmp), "31");
-								nvram_set(strcat_r(prefix2, "regrev", tmp2), "31");
-								commit_needed++;
+								if (!nvram_match(strcat_r(prefix2, "regrev", tmp2), "31"))
+								{
+									nvram_set(strcat_r(prefix, "country_rev", tmp), "31");
+									nvram_set(strcat_r(prefix2, "regrev", tmp2), "31");
+									commit_needed++;
+								}
 							}
 						}
 #endif
@@ -4267,10 +4270,13 @@ void generate_wl_para(int unit, int subunit)
 			if (	((get_model() == MODEL_RTAC68U || get_model() == MODEL_DSLAC68U) &&
 				nvram_match(strcat_r(prefix, "country_code", tmp), "EU") &&
 				nvram_match(strcat_r(prefix, "country_rev", tmp), "13")) ||
-				((get_model() == MODEL_RTAC66U) &&
+				((get_model() == MODEL_RTAC56U && nvram_match("wl_dfs_enable", "1")) &&
+				nvram_match(strcat_r(prefix, "country_code", tmp), "EU") &&
+				nvram_match(strcat_r(prefix, "country_rev", tmp), "13")) ||
+				((get_model() == MODEL_RTAC66U && nvram_match("wl_dfs_enable", "1")) &&
 				nvram_match(strcat_r(prefix, "country_code", tmp), "EU") &&
 				nvram_match(strcat_r(prefix, "country_rev", tmp), "31")) ||
-				((get_model() == MODEL_RTN66U && nvram_match("wl_dfs_enable","1")) &&
+				((get_model() == MODEL_RTN66U && nvram_match("wl_dfs_enable", "1")) &&
 				nvram_match(strcat_r(prefix, "country_code", tmp), "EU") &&
 				nvram_match(strcat_r(prefix, "country_rev", tmp), "13"))
 			)

@@ -929,13 +929,13 @@ restore_defaults(void)
 		case MODEL_RTAC56S:
 		case MODEL_RTAC56U:
 			if(After(get_blver(nvram_safe_get("bl_version")), get_blver("1.0.2.4")))	// since 1.0.2.5
-				nvram_set("reboot_time", "140"); // default is 70 sec
+				nvram_set("reboot_time", "160"); // default is 70 sec
 			break;
 		case MODEL_RTAC68U:
 			if(After(get_blver(nvram_safe_get("bl_version")), get_blver("1.0.1.6")))	// since 1.0.1.7
-				nvram_set("reboot_time", "140"); // default is 70 sec
+				nvram_set("reboot_time", "160"); // default is 70 sec
 			else
-				nvram_set("reboot_time", "80"); // extend default to 80
+				nvram_set("reboot_time", "100"); // extend default to 80
 			break;
 		case MODEL_RTAC87U:
 			nvram_set("reboot_time", "160");
@@ -945,7 +945,7 @@ restore_defaults(void)
 				nvram_set("reboot_time", "140"); // default is 70 sec
 			break;
 		case MODEL_DSLAC68U:
-			nvram_set("reboot_time", "140"); // default is 70 sec
+			nvram_set("reboot_time", "160"); // default is 70 sec
 			break;
 #endif
 		case MODEL_RTN14UHP:

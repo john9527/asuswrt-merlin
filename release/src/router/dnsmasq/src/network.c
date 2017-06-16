@@ -746,7 +746,7 @@ static int make_sock(union mysockaddr *addr, int type, int dienow)
   
   if (type == SOCK_STREAM)
     {
-      if (listen(fd, 5) == -1)
+      if (listen(fd, TCP_BACKLOG) == -1)
 	goto err;
     }
   else if (family == AF_INET)

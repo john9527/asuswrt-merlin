@@ -1,0 +1,31 @@
+#!/bin/sh
+
+https_var="https_crt_file"
+https_file="cert.tgz"
+https_dir="/jffs/https/"
+OLDIF=IFS; IFS=" ";
+
+err=0
+
+VARNAME=$https_var;
+    FILEPATH=${https_dir}${https_file}
+    printf "%-48s" "Processing $FILEPATH"
+    VALUE=$(head -c 8192 $FILEPATH | openssl enc -base64 | tr -d '\n')
+    lVALUE=$(echo ${#VALUE})
+    if [ $lVALUE -gt 0 ]; then
+	nvram set $VARNAME="${VALUE}"
+	echo -e "\tDone"
+    else
+	echo -e "\tEmpty"
+	err=1
+    fi
+
+IFS=OLDIFS;
+if [ $err -eq 0 ]; then
+	nvram commit
+	rm -rf $https_dir
+	echo "Please reboot via web gui"
+else
+	echo "Errors found!"
+fi
+exit 0

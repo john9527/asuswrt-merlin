@@ -587,6 +587,12 @@ void start_dnsmasq(int force)
 	if (pids("dnsmasq"))
 		stop_dnsmasq(force);
 
+#ifdef RTCONFIG_DNSCRYPT
+	if (nvram_match("dnscrypt_proxy", "1")) {
+		restart_dnscrypt(0);
+	}
+#endif
+
 	lan_ifname = nvram_safe_get("lan_ifname");
 #ifdef RTCONFIG_WIRELESSREPEATER
 	if(nvram_get_int("sw_mode") == SW_MODE_REPEATER && nvram_get_int("wlc_state") != WLC_STATE_CONNECTED){
@@ -766,8 +772,6 @@ void start_dnsmasq(int force)
 		nv = nvram_safe_get("lan_domain");
 		if (*nv) {
 			fprintf(fp, "dhcp-option=lan,15,%s\n", nv);
-			if (ipv6_enabled() && nvram_match("ipv6_dns_router", "1"))
-				fprintf(fp, "dhcp-option=lan,option6:24,%s\n", nv);
 		}
 
 		/* Gateway, if not set, force use lan ipaddr to avoid repeater issue */
@@ -784,12 +788,10 @@ void start_dnsmasq(int force)
 				(*nv2 && inet_addr(nv2) ? "," : ""),
 				(*nv2 && inet_addr(nv2) ? nv2 : ""),
 				(nvram_match("dhcpd_dns_router","1") ? ",0.0.0.0" : ""));
-		}
-#ifdef RTCONFIG_IPV6
-		/* IPv6 DNS server */
-		if (ipv6_enabled() && nvram_match("ipv6_dns_router", "1"))
-			fprintf(fp, "dhcp-option=lan,option6:23,[::]\n");
-#endif
+		} else
+			fprintf(fp, "dhcp-option=lan,6,%s\n",
+				lan_ipaddr);
+
 		/* WINS server */
 		nv = nvram_safe_get("dhcp_wins_x");
 		if (*nv && inet_addr(nv)) {
@@ -916,12 +918,6 @@ void start_dnsmasq(int force)
 		}
 	}
 
-#ifdef RTCONFIG_DNSCRYPT
-	if (nvram_match("dnscrypt_proxy", "1")) {
-		restart_dnscrypt(0);
-	}
-#endif
-
 /* TODO: remove it for here !!!*/
 //	int unit;
 //	char prefix[8], nvram_name[16], wan_proto[16];
@@ -996,16 +992,14 @@ void reload_dnsmasq(void)
 		start_dnsmasq(0);
 	}
 	else {
+#ifdef RTCONFIG_DNSCRYPT
+		if (nvram_match("dnscrypt_proxy", "1")) {
+			/* restart dnscrypt to update timestamp check */
+			restart_dnscrypt(0);
+		}
+#endif
 		/* notify dnsmasq */
 		kill_pidfile_s("/var/run/dnsmasq.pid", SIGHUP);
-
-
-	}
-#endif
-#ifdef RTCONFIG_DNSCRYPT
-	if (nvram_match("dnscrypt_proxy", "1")) {
-		/* restart dnscrypt to update timestamp check */
-		restart_dnscrypt(0);
 	}
 #endif
 }
@@ -1369,7 +1363,7 @@ void start_dhcp6s(void)
 		fprintf(fp,	"option domain-name \"%s\";\n", p);
 
 	/* set interface options */
-	if ((nvram_get_int("ipv6_isp_opt") & 16) == 0) {
+	if (((nvram_get_int("ipv6_isp_opt") & 16) == 0) && (!nvram_get_int("ipv6_autoconf_type"))) {
 		fprintf(fp,	"interface %s {\n", nvram_safe_get("lan_ifname"));
 		fprintf(fp,	"	allow rapid-commit;\n");
 		fprintf(fp,	"};\n");
@@ -1405,10 +1399,13 @@ void start_dhcp6s(void)
 
 		fprintf(fp,	"host kame {\n"
 					"\tprefix %s/%d infinity;\n"
-				"};\n", nvram_safe_get("ipv6_rtr_addr"), nvram_get_int("ipv6_prefix_length"));
-		fprintf(fp,	"interface %s {\n"
-					"\taddress-pool pool1 %d;\n"
-				"};\n", nvram_safe_get("lan_ifname"), (nvram_get_int("ipv6_dhcp_lifetime") > 0) ? nvram_get_int("ipv6_dhcp_lifetime") : 86400);
+				"};\n", nvram_safe_get("ipv6_prefix"), nvram_get_int("ipv6_prefix_length"));
+		fprintf(fp,	"interface %s {\n",
+				nvram_safe_get("lan_ifname"));
+		if ((nvram_get_int("ipv6_isp_opt") & 16) == 0)
+			fprintf(fp,	"\tallow rapid-commit;\n");
+		fprintf(fp,		"\taddress-pool pool1 %d;\n"
+				"};\n", (nvram_get_int("ipv6_dhcp_lifetime") > 0) ? nvram_get_int("ipv6_dhcp_lifetime") : 86400);
 		fprintf(fp,	"pool pool1 {\n"
 					"\trange %s to %s;\n"
 				"};\n", nvram_safe_get("ipv6_dhcp_start"), nvram_safe_get("ipv6_dhcp_end"));
@@ -1589,6 +1586,9 @@ void start_radvd(void)
 			cnt = write_ipv6_dns_servers(f, " RDNSS ", (char*) ((p && *p) ? p : ip), " ", 1);
 			if (cnt) fprintf(f, "{};\n");
 		}
+
+		if (nvram_invmatch("lan_domain", ""))
+			fprintf(f, " DNSSL %s {};\n", nvram_safe_get("lan_domain"));
 
 		fprintf(f,
 			"};\n");	// close "interface" section
@@ -3199,6 +3199,14 @@ start_httpd(void)
 		return;
 	}
 
+	if (!is_lan_connected()) {
+		set_invoke_later(INVOKELATER_HTTPD);
+		logmessage("HTTPD Server", "start deferred by lan state");
+		return;
+	}
+	else
+		clear_invoke_later(INVOKELATER_HTTPD);
+
 #ifdef DEBUG_RCTEST // Left for UI debug
 	httpd_dir = nvram_safe_get("httpd_dir");
 	if(strlen(httpd_dir)) chdir(httpd_dir);
@@ -3884,6 +3892,23 @@ void stop_ptcsrv(void)
 
 #endif
 
+int start_haveged(void)
+{
+#ifdef RTCONFIG_BCMARM
+	eval("/usr/sbin/haveged", "-r0", "-d32", "-i32", "-w2048");
+#else
+	eval("/usr/sbin/haveged", "-r0", "-w1024");
+#endif
+
+	return 0;
+}
+
+int stop_haveged(void)
+{
+	if (pids("haveged"))
+		killall("haveged", SIGTERM);
+}
+
 int
 start_services(void)
 {
@@ -3892,7 +3917,7 @@ start_services(void)
 #ifdef  __CONFIG_NORTON__
 	start_norton();
 #endif /* __CONFIG_NORTON__ */
-
+	start_haveged();
 #ifdef RTCONFIG_PROTECTION_SERVER
 	start_ptcsrv();
 #endif
@@ -4093,6 +4118,7 @@ stop_services(void)
 #ifdef RTCONFIG_PROTECTION_SERVER
 	stop_ptcsrv();
 #endif
+	stop_haveged();
 #ifdef  __CONFIG_NORTON__
 	stop_norton();
 #endif /* __CONFIG_NORTON__ */
@@ -5075,7 +5101,13 @@ check_ddr_done:
 		}
 		if(action&RC_SERVICE_START){
 //_dprintf("restart_nas_services(%d): test 11.\n", getpid());
+			int restart_upnp = 0;
+			if (pidof("miniupnpd") > 0) {
+				stop_upnp();
+				restart_upnp = 1;
+			}
 			restart_nas_services(0, 1);
+			if (restart_upnp) start_upnp();
 		}
 	}
 #if defined(RTCONFIG_SAMBASRV) && defined(RTCONFIG_FTP)
@@ -6290,6 +6322,10 @@ void set_acs_ifnames()
 
 	if (nvram_match("wl1_country_code", "EU"))
 	{
+#ifdef RTAC66U
+		if (!nvram_match("wl1_dfs", "1"))
+			nvram_set("acs_dfs", "0");
+#endif
 		if (nvram_match("acs_dfs", "1"))
 		{
 			nvram_set("wl1_acs_excl_chans", "");

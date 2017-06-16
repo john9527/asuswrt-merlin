@@ -52,36 +52,6 @@ function update_upTime(){
 			timenow = systime_epoch;
 			systime_epoch += 1;
 			uptime = parseInt(uptimeStr.substring(32,42));
-			if (wanstart > 0) {
-				wantime = timenow - parseInt(wanstart);  //calc wan time
-				wantotal = parseInt(wanuptime) + wantime - parseInt(wanbootdelay);
-				document.getElementById('wan_total').style.display = "";
-				if (wantime != wantotal) {
-					document.getElementById('wan_current').style.display = "";
-					document.getElementById('wantotal_th').innerHTML = "WAN " + "<#General_x_SystemUpTime_itemname#>" + " (Total)";
-				}
-				else {
-					document.getElementById('wan_current').style.display = "none";
-					document.getElementById('wantotal_th').innerHTML = "WAN " + "<#General_x_SystemUpTime_itemname#>" + " (Total / Current)";
-				}
-				document.getElementById('wan_status').style.display = "none";
-			}
-			else if (wanstart == 0) {
-				wantime = uptime - parseInt(wanbootdelay);  //wan up during boot, time not yet set
-				wantotal = wantime;
-				document.getElementById('wan_total').style.display = "";
-				document.getElementById('wan_current').style.display = "none";
-				document.getElementById('wantotal_th').innerHTML = "WAN " + "<#General_x_SystemUpTime_itemname#>" + " (Total / Current)";
-				document.getElementById('wan_status').style.display = "none";
-			}
-			else {
-				wantime = 0; //wan is down
-				wantotal = parseInt(wanuptime) - parseInt(wanbootdelay);
-				document.getElementById('wan_total').style.display = "";
-				document.getElementById('wan_current').style.display = "";
-				document.getElementById('wantotal_th').innerHTML = "WAN " + "<#General_x_SystemUpTime_itemname#>" + " (Total)";
-				document.getElementById('wan_status').style.display = "";
-			}
 
 			//System
 			Days = Math.floor(uptime / (60*60*24));	
@@ -94,34 +64,70 @@ function update_upTime(){
 			$("boot_minutes").innerHTML = Minutes;
 			$("boot_seconds").innerHTML = Seconds;
 
-			//Current 
-			Days = Math.floor(wantime / (60*60*24));
-			Hours = Math.floor((wantime / 3600) % 24);
-			Minutes = Math.floor(wantime % 3600 / 60);
-			Seconds = Math.floor(wantime % 60);
+			if (sw_mode != 1) {
+				document.getElementById('wan_total').style.display = "none";
+				document.getElementById('wan_current').style.display = "none";
+			} else {
+				if (wanstart > 0) {
+					wantime = timenow - parseInt(wanstart);  //calc wan time
+					wantotal = parseInt(wanuptime) + wantime - parseInt(wanbootdelay);
+					document.getElementById('wan_total').style.display = "";
+					if (wantime != wantotal) {
+						document.getElementById('wan_current').style.display = "";
+						document.getElementById('wantotal_th').innerHTML = "WAN " + "<#General_x_SystemUpTime_itemname#>" + " (Total)";
+					}
+					else {
+						document.getElementById('wan_current').style.display = "none";
+						document.getElementById('wantotal_th').innerHTML = "WAN " + "<#General_x_SystemUpTime_itemname#>" + " (Total / Current)	";
+					}
+					document.getElementById('wan_status').style.display = "none";
+				}
+				else if (wanstart == 0) {
+					wantime = uptime - parseInt(wanbootdelay);  //wan up during boot, time not yet set
+					wantotal = wantime;
+					document.getElementById('wan_total').style.display = "";
+					document.getElementById('wan_current').style.display = "none";
+					document.getElementById('wantotal_th').innerHTML = "WAN " + "<#General_x_SystemUpTime_itemname#>" + " (Total / Current)";
+					document.getElementById('wan_status').style.display = "none";
+				}
+				else {
+					wantime = 0; //wan is down
+					wantotal = parseInt(wanuptime) - parseInt(wanbootdelay);
+					document.getElementById('wan_total').style.display = "";
+					document.getElementById('wan_current').style.display = "";
+					document.getElementById('wantotal_th').innerHTML = "WAN " + "<#General_x_SystemUpTime_itemname#>" + " (Total)";
+					document.getElementById('wan_status').style.display = "";
+				}
 
-			if (Days < 0 || Hours < 0 || Minutes < 0 || Seconds < 0) {  //block transients during up/down
-				Days = 0; Hours = 0; Minutes = 0; Seconds = 0;
+				//Current
+				Days = Math.floor(wantime / (60*60*24));
+				Hours = Math.floor((wantime / 3600) % 24);
+				Minutes = Math.floor(wantime % 3600 / 60);
+				Seconds = Math.floor(wantime % 60);
+
+				if (Days < 0 || Hours < 0 || Minutes < 0 || Seconds < 0) {  //block transients during up/down
+					Days = 0; Hours = 0; Minutes = 0; Seconds = 0;
+				}
+
+				$("wan_days").innerHTML = Days;
+				$("wan_hours").innerHTML = Hours;
+				$("wan_minutes").innerHTML = Minutes;
+				$("wan_seconds").innerHTML = Seconds;
+
+				//Total
+				Days = Math.floor(wantotal / (60*60*24));
+				Hours = Math.floor((wantotal / 3600) % 24);
+				Minutes = Math.floor(wantotal % 3600 / 60);
+				Seconds = Math.floor(wantotal % 60);
+
+				if (Days >=0 && Hours >=0 && Minutes >=0 && Seconds >= 0) {  //block transients during up/down
+					$("wan_tdays").innerHTML = Days;
+					$("wan_thours").innerHTML = Hours;
+					$("wan_tminutes").innerHTML = Minutes;
+					$("wan_tseconds").innerHTML = Seconds;
+				}
 			}
 
-			$("wan_days").innerHTML = Days;
-			$("wan_hours").innerHTML = Hours;
-			$("wan_minutes").innerHTML = Minutes;
-			$("wan_seconds").innerHTML = Seconds;
-			
-			//Total
-			Days = Math.floor(wantotal / (60*60*24));
-			Hours = Math.floor((wantotal / 3600) % 24);
-			Minutes = Math.floor(wantotal % 3600 / 60);
-			Seconds = Math.floor(wantotal % 60);
-
-			if (Days >=0 && Hours >=0 && Minutes >=0 && Seconds >= 0) {  //block transients during up/down
-				$("wan_tdays").innerHTML = Days;
-				$("wan_thours").innerHTML = Hours;
-				$("wan_tminutes").innerHTML = Minutes;
-				$("wan_tseconds").innerHTML = Seconds;
-			}
-			
 			setTimeout("update_upTime();", 1000);
 		}
 	});

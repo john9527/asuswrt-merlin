@@ -109,6 +109,21 @@ void update_lan_state(int state, int reason)
 		// keep ip info if it is stopped from connected
 		nvram_set_int(strcat_r(prefix, "sbstate_t", tmp), reason);
 	}
+
+	else if(state==LAN_STATE_CONNECTED) {
+		if(get_invoke_later()&INVOKELATER_HTTPD)
+			notify_rc("restart_httpd");
+#ifdef RTCONFIG_USB
+#ifdef RTCONFIG_MEDIA_SERVER
+		if(get_invoke_later()&INVOKELATER_DMS)
+			notify_rc("restart_dms");
+#endif
+#ifdef RTCONFIG_SAMBASRV
+		if(get_invoke_later()&INVOKELATER_SMB)
+			notify_rc("restart_samba");
+#endif
+#endif
+	}
 }
 
 #ifdef CONFIG_BCMWL5
@@ -356,6 +371,13 @@ GEN_CONF:
 					(nvram_match(strcat_r(prefix, "country_rev", tmp), "13")))
 						eval("wl", "-i", ifname, "radarthrs",
 						"0x6ac", "0x30", "0x6a8", "0x30", "0x6a8", "0x30", "0x6a8", "0x30", "0x6a4", "0x30", "0x6a0", "0x30");
+#elif defined(RTAC56U)
+				if (nvram_get_int("wl_dfs_enable") == 1) {
+					if (	(nvram_match(strcat_r(prefix, "country_code", tmp), "EU")) &&
+						(nvram_match(strcat_r(prefix, "country_rev", tmp), "13")))
+							eval("wl", "-i", ifname, "radarthrs",
+							"0x6ac", "0x30", "0x6a8", "0x30", "0x6a8", "0x30", "0x6a4", "0x30", "0x6a4", "0x30", "0x6a0", "0x30");
+				}
 #elif defined(RTAC66U) || defined(RTN66U)
 //#if 0
 				if (nvram_get_int("wl_dfs_enable") == 1) {
@@ -1243,6 +1265,12 @@ void start_lan(void)
 			eval("brctl", "stp", lan_ifname, nvram_safe_get("lan_stp"));
 		else
 			eval("brctl", "stp", lan_ifname, "0");
+#ifdef BCMARM
+		if (!strcmp(lan_ifname, "br0")) {
+			snprintf(tmp, sizeof (tmp), "%d", nvram_get_int("lan_brsnoop"));
+			f_write_string("/sys/class/net/br0/bridge/multicast_snooping", tmp, 0, 0);
+		}
+#endif
 #ifdef RTCONFIG_IPV6
 		if ((get_ipv6_service() != IPV6_DISABLED) &&
 			(!((nvram_get_int("ipv6_accept_ra") & 2) != 0 && !nvram_get_int("ipv6_radvd"))))
@@ -2766,10 +2794,16 @@ lan_up(char *lan_ifname)
 	}
 #endif
 
+#if 0
 #ifdef RTCONFIG_USB
 #ifdef RTCONFIG_MEDIA_SERVER
 	if(get_invoke_later()&INVOKELATER_DMS)
 		notify_rc("restart_dms");
+#endif
+#ifdef RTCONFIG_SAMBASRV
+	if(get_invoke_later()&INVOKELATER_SMB)
+		notify_rc("restart_samba");
+#endif
 #endif
 #endif
 }

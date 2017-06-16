@@ -123,6 +123,8 @@ static char auth_userid[AUTH_MAX];
 static char auth_passwd[AUTH_MAX];
 static char auth_realm[AUTH_MAX];
 char host_name[64];
+char referer_host[64];
+char user_agent[1024];
 
 #ifdef TRANSLATE_ON_FLY
 char Accept_Language[16];
@@ -149,7 +151,7 @@ struct language_table language_tables[] = {
 	{"es-py", "ES"},
 	{"es-pa", "ES"},
 	{"es-ni", "ES"},
-    {"es-gt", "ES"},
+	{"es-gt", "ES"},
 	{"es-do", "ES"},
 	{"es-es", "ES"},
 	{"es-hn", "ES"},
@@ -211,6 +213,9 @@ struct language_table language_tables[] = {
 /* Forwards. */
 static int initialize_listen_socket( usockaddr* usaP );
 static int auth_check( char* dirname, char* authorization, char* url);
+static int referer_check(char* referer, int fromapp_flag);
+static int check_noauth_referrer(char* referer, int fromapp_flag);
+static char *get_referrer(char *referer);
 static void __send_authenticate( char* realm );
 static void send_authenticate( char* realm );
 static void send_error( int status, char* title, char* extra_header, char* text );
@@ -222,6 +227,7 @@ static int b64_decode( const char* str, unsigned char* space, int size );
 static int match( const char* pattern, const char* string );
 static int match_one( const char* pattern, int patternlen, const char* string );
 static void handle_request(void);
+int check_user_agent(char* user_agent);
 
 /* added by Joey */
 //2008.08 magic{
@@ -233,6 +239,7 @@ int x_Setting = 0;
 int skip_auth = 0;
 int isLogout = 0;
 char url[128];
+char cloud_file[128];
 int http_port;
 
 /* Added by Joey for handle one people at the same time */
@@ -334,6 +341,96 @@ initialize_listen_socket( usockaddr* usaP )
     return listen_fd;
     }
 
+static char
+*get_referrer(char *referer)
+{
+	char *auth_referer=NULL;
+	char *cp1=NULL, *cp2=NULL, *location_cp=NULL, *location_cp1=NULL;
+
+	if(strstr(referer,"\r") != (char*) 0)
+		location_cp1 = strtok(referer, "\r");
+	else
+		location_cp1 = referer;
+
+	location_cp = strstr(location_cp1,"//");
+	if(location_cp != (char*) 0){
+		cp1 = &location_cp[2];
+		if(strstr(cp1,"/") != (char*) 0){
+			cp2 = strtok(cp1, "/");
+			auth_referer = cp2;
+		}else
+			auth_referer = cp1;
+	}else
+		auth_referer = location_cp1;
+
+	return auth_referer;
+}
+
+static int
+check_noauth_referrer(char* referer, int fromapp_flag)
+{
+	char *auth_referer=NULL;
+
+	if(fromapp_flag != 0)
+		return 0;
+
+	if(!referer || !strlen(host_name)){
+		return NOREFERER;
+	}else{
+		auth_referer = get_referrer(referer);
+	}
+
+	if(!strcmp(host_name, auth_referer))
+		return 0;
+	else
+		return REFERERFAIL;
+}
+
+static int
+referer_check(char* referer, int fromapp_flag)
+{
+	char *auth_referer=NULL;
+	const int d_len = strlen(DUT_DOMAIN_NAME);
+	int port = 0;
+	int referer_from_https = 0;
+	int referer_host_check = 0;
+
+	if(fromapp_flag != 0)
+		return 0;
+	if(!referer){
+		return NOREFERER;
+	}else{
+		auth_referer = get_referrer(referer);
+	}
+
+	if(referer_host[0] == 0){
+		return WEB_NOREFERER;
+	}
+
+	if(!strcmp(host_name, auth_referer)) referer_host_check = 1;
+
+	if (*(auth_referer + d_len) == ':' && (port = atoi(auth_referer + d_len + 1)) > 0 && port < 65536)
+		referer_from_https = 1;
+
+	if (((strlen(auth_referer) == d_len) || (*(auth_referer + d_len) == ':' && atoi(auth_referer + d_len + 1) > 0))
+	   && strncmp(DUT_DOMAIN_NAME, auth_referer, d_len)==0){
+		if(referer_from_https)
+			snprintf(auth_referer,sizeof(referer_host),"%s:%d",nvram_safe_get("lan_ipaddr"), port);
+		else
+			snprintf(auth_referer,sizeof(referer_host),"%s",nvram_safe_get("lan_ipaddr"));
+	}
+
+	/* form based referer info? */
+	if(referer_host_check && (strlen(auth_referer) == strlen(referer_host)) && strncmp( auth_referer, referer_host, strlen(referer_host) ) == 0){
+		//_dprintf("asus token referer_check: the right user and password\n");
+		return 0;
+	}else{
+		//_dprintf("asus token referer_check: the wrong user and password\n");
+		return REFERERFAIL;
+	}
+	return REFERERFAIL;
+}
+
 static int
 auth_check( char* dirname, char* authorization ,char* url)
 {
@@ -419,6 +516,7 @@ auth_check( char* dirname, char* authorization ,char* url)
 		login_try = 0;
                 last_login_timestamp = 0;
 		last_login_ip = 0;
+		set_referer_host();
 		return 1;
 	}
 	else
@@ -643,6 +741,31 @@ int web_write(const char *buffer, int len, FILE *stream)
 	}
 	return r;
 }
+
+int check_user_agent(char* user_agent){
+
+	int fromapp = 0;
+
+	if(user_agent != NULL){
+		char *cp1=NULL, *app_router=NULL, *app_platform=NULL, *app_framework=NULL, *app_verison=NULL;
+		cp1 = strdup(user_agent);
+
+		vstrsep(cp1, "-", &app_router, &app_platform, &app_framework, &app_verison);
+
+		if(app_router != NULL && app_framework != NULL && strcmp( app_router, "asusrouter") == 0){
+				fromapp=FROM_ASUSROUTER;
+			if(strcmp( app_framework, "DUTUtil") == 0)
+				fromapp=FROM_DUTUtil;
+			else if(strcmp( app_framework, "ASSIA") == 0)
+				fromapp=FROM_ASSIA;
+			else if(strcmp( app_framework, "IFTTT") == 0)
+				fromapp=FROM_IFTTT;
+		}
+		if(cp1) free(cp1);
+	}
+	return fromapp;
+}
+
 #if 0
 void
 do_file(char *path, FILE *stream)
@@ -688,6 +811,28 @@ void do_file(char *path, FILE *stream)
 }
 
 #endif
+
+void set_referer_host(void)
+{
+	const int d_len = strlen(DUT_DOMAIN_NAME);
+	int port = 0;
+	int referer_includes_port = 0;
+
+	memset(referer_host, 0, sizeof(referer_host));
+	if (*(host_name + d_len) == ':' && (port = atoi(host_name + d_len + 1)) > 0 && port < 65536){
+		referer_includes_port = 1;
+	}
+	if (((strlen(host_name) == d_len) || (*(host_name + d_len) == ':' && atoi(host_name + d_len + 1) > 0))
+	   && strncmp(DUT_DOMAIN_NAME, host_name, d_len)==0){
+		if(referer_includes_port)
+			snprintf(referer_host,sizeof(referer_host),"%s:%d",nvram_safe_get("lan_ipaddr"), port);
+		else
+			snprintf(referer_host,sizeof(referer_host),"%s",nvram_safe_get("lan_ipaddr"));
+	}
+	else
+		snprintf(referer_host,sizeof(host_name),"%s",host_name);
+}
+
 int is_firsttime(void);
 
 time_t detect_timestamp, detect_timestamp_old, signal_timestamp;
@@ -702,18 +847,20 @@ static void
 handle_request(void)
 {
 	char line[10000], *cur;
-	char *method, *path, *protocol, *authorization, *boundary, *alang;
+	char *method, *path, *protocol, *authorization, *boundary, *alang, *referer, *useragent;
 	char *cp;
 	char *file;
 	int len;
 	struct mime_handler *handler;
 	struct except_mime_handler *exhandler;
-	int mime_exception, login_state;
+	struct mime_referer *doreferer;
+	int mime_exception, do_referer, login_state = -1;
 	int fromapp=0;
+	int referer_result = 1;
 	int cl = 0, flags;
 
 	/* Initialize the request variables. */
-	authorization = boundary = NULL;
+	authorization = boundary = referer = useragent = NULL;
 	host_name[0] = 0;
 	bzero( line, sizeof line );
 
@@ -808,12 +955,29 @@ handle_request(void)
 			authorization = cp;
 			cur = cp + strlen(cp) + 1;
 		}
+		else if ( strncasecmp( cur, "User-Agent:", 11 ) == 0 )
+		{
+			cp = &cur[11];
+			cp += strspn( cp, " \t" );
+			useragent = cp;
+			cur = cp + strlen(cp) + 1;
+			//_dprintf("httpd user-agent = %s\n", useragent);
+		}
+		else if ( strncasecmp( cur, "Referer:", 8 ) == 0 )
+		{
+			cp = &cur[8];
+			cp += strspn( cp, " \t" );
+			referer = cp;
+			cur = cp + strlen(cp) + 1;
+			_dprintf("httpd referer = %s\n", referer);
+		}
 		else if ( strncasecmp( cur, "Host:", 5 ) == 0 )
 		{
 			cp = &cur[5];
 			cp += strspn( cp, " \t" );
 			sethost(cp);
 			cur = cp + strlen(cp) + 1;
+			_dprintf("httpd host = %s\n", host_name);
 		}
 		else if (strncasecmp( cur, "Content-Length:", 15 ) == 0) {
 			cp = &cur[15];
@@ -874,20 +1038,31 @@ handle_request(void)
 		strlcpy(url, url+strlen(GETAPPSTR), sizeof(url));
 		file += strlen(GETAPPSTR);
 	}
+	//_dprintf("fromapp(url): %i\n", fromapp);
 
-	//printf("httpd url: %s file: %s\n", url, file);
+	memset(user_agent, 0, sizeof(user_agent));
+	if(useragent != NULL)
+		strncpy(user_agent, useragent, sizeof(user_agent)-1);
+	else
+		strcpy(user_agent, "");
 
+	fromapp = check_user_agent(useragent);
+	//_dprintf("fromapp(check_user_agent): %i\n", fromapp);
+
+	_dprintf("httpd url: %s file: %s\n", url, file);
+
+	http_login_timeout(login_ip_tmp);
+	set_referer_host();
 	mime_exception = 0;
+	do_referer = 0;
 
 	if(!fromapp) {
-		http_login_timeout(login_ip_tmp);	// 2008.07 James.
+
 		login_state = http_login_check();
 
 		// for each page, mime_exception is defined to do exception handler
 
-		mime_exception = 0;
-
-		// check exception first
+		// check exception
 		for (exhandler = &except_mime_handlers[0]; exhandler->pattern; exhandler++) {
 			if(match(exhandler->pattern, url))
 			{
@@ -895,7 +1070,16 @@ handle_request(void)
 				break;
 			}
 		}
+		// check doreferer
+		for (doreferer = &mime_referers[0]; doreferer->pattern; doreferer++) {
+			if(match(doreferer->pattern, url))
+			{
+				do_referer = doreferer->flag;
+				break;
+			}
+		}
 
+		// check for login conditions
 		if(login_state==1)
 		{
 			x_Setting = nvram_get_int("x_Setting");
@@ -917,19 +1101,44 @@ handle_request(void)
 	for (handler = &mime_handlers[0]; handler->pattern; handler++) {
 		if (match(handler->pattern, url))
 		{
-			if (handler->auth) {
-				if(skip_auth) {
+			nvram_set("httpd_handle_request", url);
+			//nvram_set_int("httpd_handle_request_fromapp", fromapp);
 
+			if (handler->auth) {
+				if (skip_auth) {
+					//skip
 				}
 				else if ((mime_exception&MIME_EXCEPTION_NOAUTH_FIRST)&&!x_Setting) {
 					skip_auth=1;
 				}
 				else if((mime_exception&MIME_EXCEPTION_NOAUTH_ALL)) {
+					//noauth
 				}
 				else {
+					if(do_referer&CHECK_REFERER){
+						referer_result = referer_check(referer, fromapp);
+						_dprintf("referer_result(check): %i, referer: %s fromapp: %i\n", referer_result, referer, fromapp);
+						if(referer_result != 0){
+							if(strcasecmp(method, "post") == 0){
+								if (handler->input) {
+									handler->input(file, conn_fp, cl, boundary);
+								}
+							}
+							if(!fromapp) {
+								http_logout(login_ip_tmp);
+							}
+							return;
+						}
+					}
 					handler->auth(auth_userid, auth_passwd, auth_realm);
 					if (!auth_check(auth_realm, authorization, url))
 					{
+						_dprintf("referer_result(auth): realm: %s url: %s\n", auth_realm, url);
+						if(strcasecmp(method, "post") == 0){
+							if (handler->input) {
+								handler->input(file, conn_fp, cl, boundary);
+							}
+						}
 						if(!fromapp) {
 							http_logout(login_ip_tmp);
 						}
@@ -944,6 +1153,22 @@ handle_request(void)
 							&& !strstr(url, ".gif")
 							&& !strstr(url, ".png"))
 						http_login(login_ip_tmp, url);
+				}
+			}else{
+				if(fromapp == 0 && (do_referer&CHECK_REFERER)){
+					referer_result = check_noauth_referrer(referer, fromapp);
+					_dprintf("referer_result(noauth): %i, referer: %s fromapp: %i\n", referer_result, referer, fromapp);
+					if(referer_result != 0){
+						if(strcasecmp(method, "post") == 0){
+							if (handler->input) {
+								handler->input(file, conn_fp, cl, boundary);
+							}
+						}
+						if(!fromapp) {
+							http_logout(login_ip_tmp);
+						}
+						return;
+					}
 				}
 			}
 
@@ -994,8 +1219,11 @@ handle_request(void)
 //#ifdef RTCONFIG_CLOUDSYNC
 		// Todo: verify invite code
 		if(strlen(file) > 50){
-			char inviteCode[100];
-			sprintf(inviteCode, "<script>location.href='/cloud_sync.asp?flag=%s';</script>", file);
+			char inviteCode[256];
+			memset(cloud_file, 0, sizeof(cloud_file));
+			if(!check_xxs_blacklist(file, 0))
+				strlcpy(cloud_file, file, sizeof(cloud_file));
+			snprintf(inviteCode, sizeof(inviteCode), "<meta http-equiv=\"refresh\" content=\"0; url=cloud_sync.asp?flag=%s\">\r\n", cloud_file);
 			send_page( 200, "OK", (char*) 0, inviteCode);
 		}
 		else
@@ -1018,6 +1246,8 @@ handle_request(void)
 
 		}
 	}
+	nvram_unset("httpd_handle_request");
+	//nvram_unset("httpd_handle_request_fromapp");
 }
 
 //2008 magic{
@@ -1065,6 +1295,7 @@ void http_login(unsigned int ip, char *url) {
 	char login_ipstr[32], login_timestampstr[32];
 	char login_port_str[] = "65535XXX";
 
+	unsigned int login_port = nvram_get_int("login_port");
 	unsigned int http_lanport = nvram_get_int("http_lanport");
 	unsigned int https_lanport = nvram_get_int("https_lanport");
 	unsigned int webdav_https_port = nvram_get_int("webdav_https_port");
@@ -1076,28 +1307,33 @@ void http_login(unsigned int ip, char *url) {
 //	  && http_port != SERVER_PORT_SSL
 	  && http_port != webdav_https_port
 #endif
-	    ) || ip == 0x100007f)
+	    ) || ip == 0x100007f || ip == 0x0000000) // local or asusrouter
 		return;
 
-	login_ip = ip;
-	last_login_ip = 0;
-
-	login_ip_addr.s_addr = login_ip;
-	login_ip_str = inet_ntoa(login_ip_addr);
-	nvram_set("login_ip_str", login_ip_str);
-
 	login_timestamp = uptime();
-
-	memset(login_ipstr, 0, 32);
-	sprintf(login_ipstr, "%u", login_ip);
-	nvram_set("login_ip", login_ipstr);
-
 	memset(login_timestampstr, 0, 32);
 	sprintf(login_timestampstr, "%lu", login_timestamp);
 	nvram_set("login_timestamp", login_timestampstr);
 
-	sprintf(login_port_str, "%u", http_port);
-	nvram_set("login_port", login_port_str);
+	if(ip != login_ip || http_port != login_port) {
+		_dprintf("httpd_login(%u:%i)\n", ip, http_port);
+
+		login_ip = ip;
+		last_login_ip = 0;
+
+		login_ip_addr.s_addr = login_ip;
+		login_ip_str = inet_ntoa(login_ip_addr);
+		nvram_set("login_ip_str", login_ip_str);
+
+		memset(login_ipstr, 0, 32);
+		sprintf(login_ipstr, "%u", login_ip);
+		nvram_set("login_ip", login_ipstr);
+
+		sprintf(login_port_str, "%u", http_port);
+		nvram_set("login_port", login_port_str);
+	}
+
+	set_referer_host();
 }
 
 int http_client_ip_check(void) {
@@ -1141,7 +1377,7 @@ int http_login_check(void)
 //	  && http_port != SERVER_PORT_SSL
 	  && http_port != webdav_https_port
 #endif
-	    ) || login_ip_tmp == 0x100007f)
+	    ) || login_ip_tmp == 0x100007f || login_ip_tmp == 0x0000000) // local or asusrouter
 		//return 1;
 		return 0;	// 2008.01 James.
 
@@ -1188,6 +1424,7 @@ void http_logout(unsigned int ip)
 	unsigned int https_lanport = nvram_get_int("https_lanport");
 
 	if ((ip == login_ip && (login_port == http_lanport || login_port == https_lanport || !login_port)) || ip == 0 ) {
+		_dprintf("httpd_logout(%u:%i)\n", ip, http_port);
 		last_login_ip = login_ip;
 		login_ip = 0;
 		login_timestamp = 0;
@@ -1195,6 +1432,7 @@ void http_logout(unsigned int ip)
 		nvram_set("login_ip", "");
 		nvram_set("login_timestamp", "");
 		nvram_set("login_port", "");
+		memset(referer_host, 0, sizeof(referer_host));
 
 // 2008.03 James. {
 		if (change_passwd == 1) {
@@ -1889,8 +2127,13 @@ QTN_RESET:
 void save_cert(void)
 {
 	if (eval("tar", "-C", "/", "-czf", "/tmp/cert.tgz", "etc/cert.pem", "etc/key.pem") == 0) {
-		if (nvram_set_file("https_crt_file", "/tmp/cert.tgz", 8192)) {
-			nvram_commit_x();
+		if (nvram_match("jffs2_on", "1") && check_if_dir_exist("/jffs/https")) {
+			system("cp /tmp/cert.tgz /jffs/https/cert.tgz");
+			nvram_set("https_crt_file", "");
+		} else {
+			if (nvram_set_file("https_crt_file", "/tmp/cert.tgz", 8192)) {
+				nvram_commit_x();
+			}
 		}
 	}
 	unlink("/tmp/cert.tgz");
@@ -1901,6 +2144,8 @@ void erase_cert(void)
 	unlink("/etc/cert.pem");
 	unlink("/etc/key.pem");
 	nvram_unset("https_crt_file");
+	if (check_if_file_exist("/jffs/https/cert.tgz"))
+		system("rm /jffs/https/cert.tgz");
 	//nvram_unset("https_crt_gen");
 	nvram_set("https_crt_gen", "0");
 }
@@ -1928,12 +2173,19 @@ void start_ssl(void)
 			ok = 0;
 			if (save) {
 				fprintf(stderr, "Save SSL certificate...\n"); // tmp test
-				if (nvram_get_file("https_crt_file", "/tmp/cert.tgz", 8192)) {
-					if (eval("tar", "-xzf", "/tmp/cert.tgz", "-C", "/", "etc/cert.pem", "etc/key.pem") == 0){
+				if (check_if_file_exist("/jffs/https/cert.tgz")) {
+					if (eval("tar", "-xzf", "/jffs/https/cert.tgz", "-C", "/", "etc/cert.pem", "etc/key.pem") == 0){
 						system("cat /etc/key.pem /etc/cert.pem > /etc/server.pem");
-						ok = 1;
+						ok =1;
 					}
-					unlink("/tmp/cert.tgz");
+				} else {
+					if (nvram_get_file("https_crt_file", "/tmp/cert.tgz", 8192)) {
+						if (eval("tar", "-xzf", "/tmp/cert.tgz", "-C", "/", "etc/cert.pem", "etc/key.pem") == 0){
+							system("cat /etc/key.pem /etc/cert.pem > /etc/server.pem");
+							unlink("/tmp/cert.tgz");
+							ok = 1;
+						}
+					}
 				}
 			}
 			if (!ok) {
@@ -1948,7 +2200,7 @@ void start_ssl(void)
 			}
 		}
 
-		if ((save) && (*nvram_safe_get("https_crt_file")) == 0) {
+		if ((save) && (*nvram_safe_get("https_crt_file") == 0) && !check_if_file_exist("/jffs/https/cert.tgz")) {
 			save_cert();
 		}
 

@@ -456,6 +456,7 @@ obj-$(RTCONFIG_TCPDUMP) += tcpdump-4.4.0
 
 # Merlin/fork addons
 obj-n += wol
+obj-y += haveged
 ifneq ($(or $(findstring linux-2.6.36,$(LINUXDIR)),$(findstring linux-3.x,$(LINUXDIR))),)
 obj-y += ipset_arm
 obj-y += libmnl
@@ -1292,11 +1293,11 @@ libsodium: libsodium/stamp-h1
 
 libsodium-install: libsodium
 	install -d $(INSTALLDIR)/libsodium/usr/lib
-	install -D libsodium/src/libsodium/.libs/libsodium.so.18.1.0 $(INSTALLDIR)/libsodium/usr/lib/libsodium.so.18.1.0
-	$(STRIP) -s $(INSTALLDIR)/libsodium/usr/lib/libsodium.so.18.1.0
+	install -D libsodium/src/libsodium/.libs/libsodium.so.18.2.0 $(INSTALLDIR)/libsodium/usr/lib/libsodium.so.18.2.0
+	$(STRIP) -s $(INSTALLDIR)/libsodium/usr/lib/libsodium.so.18.2.0
 	cd $(INSTALLDIR)/libsodium/usr/lib/ && \
-		ln -sf libsodium.so.18.1.0 libsodium.so.18 && \
-		ln -sf libsodium.so.18.1.0 libsodium.so
+		ln -sf libsodium.so.18.2.0 libsodium.so.18 && \
+		ln -sf libsodium.so.18.2.0 libsodium.so
 
 libsodium-clean:
 	-$(MAKE) -C libsodium clean
@@ -1324,6 +1325,31 @@ dnscrypt-install: dnscrypt
 dnscrypt-clean:
 	-@$(MAKE) -C dnscrypt clean
 	@rm -rf dnscrypt/stamp-h1 dnscrypt/src/dnscrypt-proxy/.deps dnscrypt/Makefile
+
+haveged/stamp-h1:
+	cd $(TOP)/haveged && CC=$(CC) AR=$(AR) STRIP=$(CROSS_COMPILE)strip \
+	autoreconf -i -f && \
+	CFLAGS="-Wall -Os $(EXTRACFLAGS) -ffunction-sections -fdata-sections" \
+#	CPPFLAGS="-I$(TOP)/include" \
+	LDFLAGS="-ffunction-sections -fdata-sections -Wl,--gc-sections" \
+	$(CONFIGURE) --prefix=/usr --enable-daemon
+	touch haveged/stamp-h1
+
+haveged: haveged/stamp-h1
+	$(MAKE) -C haveged $(PARALLEL_BUILD)
+
+haveged-install:
+	install -D haveged/src/.libs/libhavege.so.1.1.0 $(INSTALLDIR)/haveged/usr/lib/libhavege.so.1.1.0
+	$(STRIP) $(INSTALLDIR)/haveged/usr/lib/libhavege.so.1.1.0
+	cd $(INSTALLDIR)/haveged/usr/lib && \
+		ln -sf libhavege.so.1.1.0 libhavege.so.1 && \
+		ln -sf libhavege.so.1.1.0 libhavege.so
+	install -D haveged/src/.libs/haveged $(INSTALLDIR)/haveged/usr/sbin/haveged
+	$(STRIP) $(INSTALLDIR)/haveged/usr/sbin/haveged
+
+haveged-clean:
+	-@$(MAKE) -C haveged clean
+	@rm -rf haveged/stamp-h1 haveged/src/.deps haveged/Makefile
 
 nettle/stamp-h1:
 	@cd nettle && \

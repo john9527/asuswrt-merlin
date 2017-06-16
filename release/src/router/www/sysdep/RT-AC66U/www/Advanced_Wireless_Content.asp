@@ -104,7 +104,10 @@ function initial(){
 	change_wl_nmode(document.form.wl_nmode_x);
 	if(country == "EU"){		//display checkbox of DFS channel under 5GHz
 		if(based_modelid == "RT-AC68U" || based_modelid == "RT-AC68U_V2" || based_modelid == "DSL-AC68U" || based_modelid == "RT-AC69U"  
-		|| based_modelid == "RT-AC87U"){
+		|| based_modelid == "RT-AC87U"
+		|| (based_modelid == "RT-AC56U" && wl_dfs_enable == "1")
+		|| (based_modelid == "RT-AC66U" && wl1_dfs == "1" && wl_dfs_enable == "1")        //0: A2 not support, 1: B0 support
+		|| (based_modelid == "RT-N66U" && wl_dfs_enable == "1")){
 			if(document.form.wl_channel.value  == '0' && '<% nvram_get("wl_unit"); %>' == '1')
 				$('dfs_checkbox').style.display = "";
 		}

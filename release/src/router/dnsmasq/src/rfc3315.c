@@ -2130,7 +2130,7 @@ void relay_upstream6(struct dhcp_relay *relay, ssize_t sz,
 		my_syslog(MS_DHCP | LOG_ERR, _("Cannot multicast to DHCPv6 server without correct interface"));
 	    }
 		
-	  send_from(daemon->dhcp6fd, 0, daemon->outpacket.iov_base, save_counter(0), &to, &from, 0);
+	  send_from(daemon->dhcp6fd, 0, daemon->outpacket.iov_base, save_counter(-1), &to, &from, 0);
 	  
 	  if (option_bool(OPT_LOG_OPTS))
 	    {

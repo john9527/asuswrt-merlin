@@ -9,3 +9,4 @@ Do While Not WScript.StdIn.AtEndOfStream
   inp = WScript.StdIn.ReadLine()
   WScript.Echo rxp.Replace(inp, patparts(2))
 Loop
+

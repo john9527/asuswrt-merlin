@@ -22,9 +22,13 @@ wan_route_x = '<% nvram_get("wan_route_x"); %>';
 wan_nat_x = '<% nvram_get("wan_nat_x"); %>';
 wan_proto = '<% nvram_get("wan_proto"); %>';
 server1pid = '<% sysinfo("pid.vpnserver1"); %>';
+server1stt = '<% nvram_get("vpn_server1_state"); %>';
 server2pid = '<% sysinfo("pid.vpnserver2"); %>';
+server2stt = '<% nvram_get("vpn_server2_state"); %>';
 client1pid = '<% sysinfo("pid.vpnclient1"); %>';
+client1stt = '<% nvram_get("vpn_client1_state"); %>';
 client2pid = '<% sysinfo("pid.vpnclient2"); %>';
+client2stt = '<% nvram_get("vpn_client2_state"); %>';
 pptpdpid = '<% sysinfo("pid.pptpd"); %>';
 
 var overlib_str0 = new Array();	//Viz add 2013.04 for record longer VPN client username/pwd
@@ -34,29 +38,42 @@ vpnc_clientlist_array = decodeURIComponent('<% nvram_char_to_ascii("","vpnc_clie
 
 function initial(){
 	var state_r = " - Running";
+	var state_i = " - Connecting...";
 	var state_s = " - <span style=\"background-color: transparent; color: white;\">Stopped</span>";
 
 	show_menu();
 
 	if (openvpnd_support){
-		if (server1pid > 0)
-			$("server1_Block_Running").innerHTML = state_r;
-		else
+		if (server1pid > 0) {
+			if (server1stt == 2)
+				$("server1_Block_Running").innerHTML = state_r;
+			else
+				$("server1_Block_Running").innerHTML = state_i;
+		} else
 			$("server1_Block_Running").innerHTML = state_s;
 
-		if (client1pid > 0)
-			$("client1_Block_Running").innerHTML = state_r;
-		else
+		if (client1pid > 0) {
+			if (client1stt == 2)
+				$("client1_Block_Running").innerHTML = state_r;
+			else
+				$("client1_Block_Running").innerHTML = state_i;
+		} else
 			$("client1_Block_Running").innerHTML = state_s;
 
-		if (server2pid > 0)
-			$("server2_Block_Running").innerHTML = state_r;
-		else
+		if (server2pid > 0) {
+			if (server2stt == 2)
+				$("server2_Block_Running").innerHTML = state_r;
+			else
+				$("server2_Block_Running").innerHTML = state_i;
+		} else
 			$("server2_Block_Running").innerHTML = state_s;
 
-		if (client2pid > 0)
-			$("client2_Block_Running").innerHTML = state_r;
-		else
+		if (client2pid > 0) {
+			if (client2stt == 2)
+				$("client2_Block_Running").innerHTML = state_r;
+			else
+				$("client2_Block_Running").innerHTML = state_i;
+		} else
 			$("client2_Block_Running").innerHTML = state_s;
 
         

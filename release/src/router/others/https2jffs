@@ -1,0 +1,30 @@
+#!/bin/sh
+
+https_var="https_crt_file"
+https_file="cert.tgz"
+https_jffs="/jffs/https/"
+https_certs="/etc/cert.pem /etc/key.pem"
+OLDIF=IFS; IFS=" ";
+
+mkdir -p "$https_jffs"
+err=0
+
+VARNAME=$https_var
+    FILEPATH="${https_jffs}${https_file}"
+    tar -C / -czf $FILEPATH ${https_certs} > /dev/null 2>&1
+    printf "%-25s" "Processing $VARNAME"
+    if [ -f $FILEPATH ]; then
+	echo -e "\tDone"
+    else
+	echo -e "\tCould not create saved cert"
+	err=1
+    fi
+
+IFS=OLDIFS;
+if [ $err -eq 0 ]; then
+	nvram set $VARNAME=${FILEPATH}
+	nvram commit
+	echo "Please reboot via web gui"
+else
+	echo "Errors found!"
+fi

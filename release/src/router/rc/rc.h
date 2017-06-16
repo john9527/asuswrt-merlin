@@ -362,6 +362,10 @@ extern void stop_lan_port(void);
 extern void start_lan_wlport(void);
 extern void stop_lan_wlport(void);
 extern int wl_dev_exist(void);
+extern void set_invoke_later(unsigned int flag);
+extern void clear_invoke_later(unsigned int flag);
+extern int get_invoke_later(void);
+
 #ifdef RTCONFIG_RALINK
 extern pid_t pid_from_file(char *pidfile);
 #endif
@@ -792,8 +796,6 @@ void force_stop_dms(void);
 void stop_mt_daapd(void);
 void start_dms(void);
 void start_mt_daapd(void);
-void set_invoke_later(int flag);
-int get_invoke_later(void);
 #endif	/* RTCONFIG_MEDIA_SERVER */
 
 #ifdef RTCONFIG_WIRELESSREPEATER

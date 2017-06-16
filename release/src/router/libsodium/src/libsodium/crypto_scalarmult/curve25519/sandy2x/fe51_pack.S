@@ -1,7 +1,7 @@
 #ifdef IN_SANDY2X
 
 /*
-   This file is the result of merging
+   This file is the result of merging 
    amd64-51/fe25519_pack.c and amd64-51/fe25519_freeze.s.
 */
 #include "fe51_namespace.h"
@@ -35,6 +35,8 @@ movq   32(%rsi),%rsi
 movq REDMASK51(%rip),%rax
 lea  -18(%rax),%r10
 mov  $3,%r11
+
+.p2align 4
 ._reduceloop:
 mov  %rdx,%r12
 shr  $51,%r12
@@ -59,6 +61,7 @@ imulq  $19, %r12,%r12
 add  %r12,%rdx
 sub  $1,%r11
 ja ._reduceloop
+
 mov  $1,%r12
 cmp  %r10,%rdx
 cmovl %r11,%r12

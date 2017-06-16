@@ -1,23 +1,28 @@
 
-#include <stdlib.h>
-#include <sys/types.h>
-#ifndef _WIN32
-# include <sys/stat.h>
-# include <sys/time.h>
-#endif
-#ifdef __linux__
-# include <sys/syscall.h>
-#endif
-
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdlib.h>
 #include <string.h>
 #if !defined(_MSC_VER) && !defined(__BORLANDC__)
 # include <unistd.h>
+#endif
+
+#include <sys/types.h>
+#ifndef _WIN32
+# include <sys/stat.h>
+# include <sys/time.h>
+#endif
+#ifdef __linux__
+# ifdef __dietlibc__
+#  define _LINUX_SOURCE
+# else
+#  include <sys/syscall.h>
+# endif
+# include <poll.h>
 #endif
 
 #include "crypto_core_salsa20.h"
@@ -26,6 +31,7 @@
 #include "randombytes.h"
 #include "randombytes_salsa20_random.h"
 #include "utils.h"
+#include "private/common.h"
 
 #ifdef _WIN32
 # include <windows.h>
@@ -44,7 +50,6 @@ BOOLEAN NTAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
 
 #define SALSA20_RANDOM_BLOCK_SIZE crypto_core_salsa20_OUTPUTBYTES
 #define HASH_BLOCK_SIZE 128U
-#define COMPILER_ASSERT(X) (void) sizeof(char[(X) ? 1 : -1])
 
 #if defined(__OpenBSD__) || defined(__CloudABI__)
 # define HAVE_SAFE_ARC4RANDOM 1
@@ -128,6 +133,33 @@ safe_read(const int fd, void * const buf_, size_t size)
 #endif
 
 #ifndef _WIN32
+# if defined(__linux__) && !defined(USE_BLOCKING_RANDOM) && !defined(NO_BLOCKING_RANDOM_POLL)
+static int
+randombytes_block_on_dev_random(void)
+{
+    struct pollfd pfd;
+    int           fd;
+    int           pret;
+
+    fd = open("/dev/random", O_RDONLY);
+    if (fd == -1) {
+        return 0;
+    }
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+    do {
+        pret = poll(&pfd, 1, -1);
+    } while (pret < 0 && (errno == EINTR || errno == EAGAIN));
+    if (pret != 1) {
+        (void) close(fd);
+        errno = EIO;
+        return -1;
+    }
+    return close(fd);
+}
+# endif
+
 # ifndef HAVE_SAFE_ARC4RANDOM
 static int
 randombytes_salsa20_random_random_dev_open(void)
@@ -143,6 +175,11 @@ randombytes_salsa20_random_random_dev_open(void)
     const char **     device = devices;
     int               fd;
 
+# if defined(__linux__) && !defined(USE_BLOCKING_RANDOM) && !defined(NO_BLOCKING_RANDOM_POLL)
+    if (randombytes_block_on_dev_random() != 0) {
+        return -1;
+    }
+# endif
     do {
         fd = open(*device, O_RDONLY);
         if (fd != -1) {
@@ -173,7 +210,7 @@ randombytes_salsa20_random_random_dev_open(void)
 }
 # endif
 
-# ifdef SYS_getrandom
+# if defined(__dietlibc__) || (defined(SYS_getrandom) && defined(__NR_getrandom))
 static int
 _randombytes_linux_getrandom(void * const buf, const size_t size)
 {
@@ -181,7 +218,11 @@ _randombytes_linux_getrandom(void * const buf, const size_t size)
 
     assert(size <= 256U);
     do {
+#  ifdef __dietlibc__
+        readnb = getrandom(buf, size, 0);
+#  else
         readnb = syscall(SYS_getrandom, buf, (int) size, 0);
+#  endif
     } while (readnb < 0 && (errno == EINTR || errno == EAGAIN));
 
     return (readnb == (int) size) - 1;
@@ -221,7 +262,7 @@ randombytes_salsa20_random_init(void)
     errno = errno_save;
 # else
 
-#  ifdef SYS_getrandom
+#  if defined(SYS_getrandom) && defined(__NR_getrandom)
     {
         unsigned char fodder[16];
 
@@ -287,7 +328,7 @@ randombytes_salsa20_random_stir(void)
 
 # ifdef HAVE_SAFE_ARC4RANDOM
     arc4random_buf(m0, sizeof m0);
-# elif defined(SYS_getrandom)
+# elif defined(SYS_getrandom) && defined(__NR_getrandom)
     if (stream.getrandom_available != 0) {
         if (randombytes_linux_getrandom(m0, sizeof m0) != 0) {
             abort(); /* LCOV_EXCL_LINE */
@@ -358,7 +399,7 @@ randombytes_salsa20_random_close(void)
     ret = 0;
 # endif
 
-# ifdef SYS_getrandom
+# if defined(SYS_getrandom) && defined(__NR_getrandom)
     if (stream.getrandom_available != 0) {
         ret = 0;
     }
@@ -381,9 +422,11 @@ randombytes_salsa20_random_buf(void * const buf, const size_t size)
 
     randombytes_salsa20_random_stir_if_needed();
     COMPILER_ASSERT(sizeof stream.nonce == crypto_stream_salsa20_NONCEBYTES);
-#ifdef ULONG_LONG_MAX
+#if defined(ULONG_LONG_MAX) && defined(SIZE_MAX)
+# if SIZE_MAX > ULONG_LONG_MAX
     /* coverity[result_independent_of_operands] */
     assert(size <= ULONG_LONG_MAX);
+# endif
 #endif
     ret = crypto_stream_salsa20((unsigned char *) buf, (unsigned long long) size,
                                 (unsigned char *) &stream.nonce, stream.key);
@@ -397,7 +440,7 @@ randombytes_salsa20_random_buf(void * const buf, const size_t size)
 }
 
 static uint32_t
-randombytes_salsa20_random_getword(void)
+randombytes_salsa20_random(void)
 {
     uint32_t val;
     int      ret;
@@ -422,12 +465,6 @@ randombytes_salsa20_random_getword(void)
     memset(&stream.rnd32[stream.rnd32_outleft], 0, sizeof val);
 
     return val;
-}
-
-static uint32_t
-randombytes_salsa20_random(void)
-{
-    return randombytes_salsa20_random_getword();
 }
 
 static const char *

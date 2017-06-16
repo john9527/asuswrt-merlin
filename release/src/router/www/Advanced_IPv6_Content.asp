@@ -466,7 +466,7 @@ function showInputfield(v){
 		$("radvd_mtu_tr").style.display="none";
 	}		
 
-	hide_enable_mtu(document.form.ipv6_radvd_mtu.value);
+	hide_enable_mtu(document.form.ipv6_radvd.value);
 	
 	if(v != ipv6_proto_orig){
 			update_info(0);

@@ -33,6 +33,10 @@
 #define	DEV_GPIO(arg)	"/dev/gpio/"#arg
 #endif
 
+#define DUT_DOMAIN_NAME "router.asus.com"
+#define OLD_DUT_DOMAIN_NAME1 "www.asusnetwork.net"
+#define OLD_DUT_DOMAIN_NAME2 "www.asusrouter.com"
+
 //version.c
 extern const char *rt_version;
 extern const char *rt_serialno;
@@ -81,6 +85,15 @@ enum {
 
 #define GIF_LINKLOCAL  0x0001  /* return link-local addr */
 #define GIF_PREFIXLEN  0x0002  /* return addr & prefix */
+
+enum {
+	FROM_BROWSER,
+	FROM_ASUSROUTER,
+	FROM_DUTUtil,
+	FROM_ASSIA,
+	FROM_IFTTT,
+	FROM_UNKNOWN
+};
 
 enum {
 	ACT_IDLE,
@@ -482,6 +495,7 @@ extern void ascii_to_char(const char *output, const char *input);
 extern const char *find_word(const char *buffer, const char *word);
 extern int remove_word(char *buffer, const char *word);
 extern int remove_char(char *str, const char *c);
+extern int str_escape_quotes(const char *output, const char *input, int outsize);
 
 // file.c
 extern int check_if_file_exist(const char *file);

@@ -272,6 +272,13 @@ reltime(unsigned int seconds, char *cs)
 //2008.08 magic{
 void websRedirect(webs_t wp, char_t *url)
 {
+	char url_str[128];
+	if(check_xxs_blacklist(url, 1)){
+		memset(url_str, 0, sizeof(url_str));
+		strlcpy(url_str, "index.asp", sizeof(url_str));
+	}else
+		strlcpy(url_str, url, sizeof(url_str));
+
 	websWrite(wp, T("<html><head>\r\n"));
 
 	if(strchr(url, '>') || strchr(url, '<'))
@@ -2909,7 +2916,12 @@ static int ej_get_parameter(int eid, webs_t wp, int argc, char_t **argv){
 
 	last_was_escaped = FALSE;
 
-	//char *value = websGetVar(wp, argv[0], "");
+	char *value = websGetVar(wp, argv[0], "");
+	if(value != NULL){
+		if(check_xxs_blacklist(value, 0)){
+			return ret;
+		}
+	}
 	//websWrite(wp, "%s", value);
 	for (c = websGetVar(wp, argv[0], ""); *c; c++){
 		if (isprint((int)*c) &&
@@ -5142,6 +5154,12 @@ apply_cgi(webs_t wp, char_t *urlPrefix, char_t *webDir, int arg,
 		char *system_cmd;
 		system_cmd = websGetVar(wp, "SystemCmd","");
 
+		if(check_xxs_blacklist(system_cmd, 0)){
+			strcpy(SystemCmd, "");
+			websRedirect(wp, current_url);
+			return 0;
+		}
+
 		if(strchr(system_cmd, '&') || strchr(system_cmd, ';') || strchr(system_cmd, '%') || strchr(system_cmd, '|')){
 			_dprintf("[httpd] Invalid SystemCmd!\n");
 			strcpy(SystemCmd, "");
@@ -6697,6 +6715,9 @@ struct mime_handler mime_handlers[] = {
 	{ "chart.min.js", "text/javascript", cache_object, NULL, do_file, NULL },
 	{ "httpd_check.htm", "text/html", no_cache_IE7, do_html_post_and_get, do_ej, NULL },
 	{ "get_webdavInfo.asp", "text/html", no_cache_IE7, do_html_post_and_get, do_ej, NULL },
+	{ "manifest.appcache", "text/html", no_cache_IE7, do_html_post_and_get, do_ej, NULL },
+	{ "manifest.asp", "text/html", no_cache_IE7, do_html_post_and_get, do_ej, NULL },
+	{ "help_content.js", "text/html", no_cache_IE7, do_html_post_and_get, do_ej, NULL },
 	{ "**.xml", "text/xml", no_cache_IE7, do_html_post_and_get, do_ej, do_auth },
 	{ "**.htm*", "text/html", no_cache_IE7, do_html_post_and_get, do_ej, do_auth },
 	{ "**.asp*", "text/html", no_cache_IE7, do_html_post_and_get, do_ej, do_auth },
@@ -6723,6 +6744,7 @@ struct mime_handler mime_handlers[] = {
 	{ "**.js",  "text/javascript", no_cache_IE7, NULL, do_ej, do_auth },
 	{ "**.cab", "text/txt", NULL, NULL, do_file, do_auth },
 	{ "**.CFG", "application/force-download", NULL, NULL, do_prf_file, do_auth },
+	{ "**.TAR", "application/force-download", NULL, NULL, do_prf_file, do_auth },
 	{ "**.ovpn", "application/force-download", NULL, NULL, do_prf_ovpn_file, do_auth },
 	{ "apply.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_apply_cgi, do_auth },
 	{ "applyapp.cgi*", "text/html", no_cache_IE7, do_html_post_and_get, do_apply_cgi, do_auth },
@@ -6743,7 +6765,7 @@ struct mime_handler mime_handlers[] = {
 	{ "change_lang.cgi*", "text/html", no_cache_IE7, do_lang_post, do_lang_cgi, do_auth },
 #endif //TRANSLATE_ON_FLY
 #if (defined(RTCONFIG_JFFS2) || defined(RTCONFIG_BRCM_NAND_JFFS2))
-//	{ "backup_jffs.TAR", "application/force-download", NULL, NULL, do_jffs_file, do_auth },
+	{ "backup_jffs.TAR", "application/force-download", NULL, NULL, do_jffs_file, do_auth },
 	{ "JFFS_Backup_*.TAR", "application/force-download", NULL, NULL, do_jffs_file, do_auth },
 	{ "jffsupload.cgi*", "text/html", no_cache_IE7, do_jffsupload_post, do_jffsupload_cgi, do_auth },
 #endif
@@ -6757,6 +6779,7 @@ struct mime_handler mime_handlers[] = {
 struct except_mime_handler except_mime_handlers[] = {
 	{ "QIS_*", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 	{ "qis/*", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
+#if 0
 	{ "*.css", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 	{ "ajax.js", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 	{ "state.js", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
@@ -6764,6 +6787,8 @@ struct except_mime_handler except_mime_handlers[] = {
 	{ "popup.js", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 	{ "general.js", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 	{ "help.js", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
+	{ "jquery.js", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
+//#if 0
 	{ "start_autodet.asp", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 	{ "start_dsl_autodet.asp", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 	{ "start_apply.htm", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
@@ -6772,19 +6797,25 @@ struct except_mime_handler except_mime_handlers[] = {
 	{ "httpd_check.htm", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 	{ "status.asp", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 	{ "automac.asp", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
+	{ "result_of_detect_client.asp", MIME_EXCEPTION_NORESETTIME},
+	{ "manifest.appcache", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "manifest.asp", MIME_EXCEPTION_NOAUTH_ALL},
 	{ "detecWAN.asp", MIME_EXCEPTION_NORESETTIME},
 	{ "detecWAN2.asp", MIME_EXCEPTION_NORESETTIME},
+
 	{ "WPS_info.asp", MIME_EXCEPTION_NORESETTIME},
 	{ "WAN_info.asp", MIME_EXCEPTION_NOAUTH_ALL|MIME_EXCEPTION_NORESETTIME},
 	{ "result_of_get_changed_status.asp", MIME_EXCEPTION_NORESETTIME},
 	{ "result_of_get_changed_status_QIS.asp", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
-	{ "result_of_detect_client.asp", MIME_EXCEPTION_NORESETTIME},
 	{ "detect_firmware.asp", MIME_EXCEPTION_NOAUTH_ALL},
-	{ "Nologin.asp", MIME_EXCEPTION_NOAUTH_ALL},
-	{ "Logout.asp", MIME_EXCEPTION_NOAUTH_ALL},
-	{ "alertImg.gif", MIME_EXCEPTION_NOAUTH_ALL},
-	{ "error_page.htm", MIME_EXCEPTION_NOAUTH_ALL},
+
 	{ "jquery.js", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "*.gz", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "*.tgz", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "*.tar", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "*.zip", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "*.ipk", MIME_EXCEPTION_NOAUTH_ALL},
+	
 	{ "gotoHomePage.htm", MIME_EXCEPTION_NOAUTH_ALL},
 	{ "update_appstate.asp", MIME_EXCEPTION_NOAUTH_ALL},
 	{ "update_applist.asp", MIME_EXCEPTION_NOAUTH_ALL},
@@ -6792,11 +6823,51 @@ struct except_mime_handler except_mime_handlers[] = {
 //#if (defined(RTCONFIG_JFFS2) || defined(RTCONFIG_BRCM_NAND_JFFS2))
 //	{ "jffsupload.cgi", MIME_EXCEPTION_NOAUTH_FIRST|MIME_EXCEPTION_NORESETTIME},
 //#endif
-	{ "*.gz", MIME_EXCEPTION_NOAUTH_ALL},
-	{ "*.tgz", MIME_EXCEPTION_NOAUTH_ALL},
-//	{ "*.tar", MIME_EXCEPTION_NOAUTH_ALL},
-	{ "*.zip", MIME_EXCEPTION_NOAUTH_ALL},
-	{ "*.ipk", MIME_EXCEPTION_NOAUTH_ALL},
+#endif
+//	{ "manifest.appcache", MIME_EXCEPTION_NOAUTH_ALL},
+//	{ "manifest.asp", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "Nologin.asp", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "Logout.asp", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "alertImg.gif", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "error_page.htm", MIME_EXCEPTION_NOAUTH_ALL},
+	{ "httpd_check.htm", MIME_EXCEPTION_NOAUTH_ALL},
+	{ NULL, 0 }
+};
+
+// some should be referer
+struct mime_referer mime_referers[] = {
+	{ "start_apply.htm", CHECK_REFERER},
+	{ "start_apply2.htm", CHECK_REFERER},
+	{ "applyapp.cgi", CHECK_REFERER},
+	{ "apply.cgi", CHECK_REFERER},
+	{ "apply_new.cgi", CHECK_REFERER},
+	{ "get_sharelink.cgi", CHECK_REFERER},
+	{ "change_wan_unit.cgi", CHECK_REFERER},
+	{ "upgrade.cgi", CHECK_REFERER},
+	{ "upload.cgi", CHECK_REFERER},
+	{ "dsllog.cgi", CHECK_REFERER},
+	{ "update.cgi", CHECK_REFERER},
+	{ "vpnupload.cgi", CHECK_REFERER},
+	{ "jffsupload.cgi", CHECK_REFERER},
+	{ "findasus.cgi", CHECK_REFERER},
+	{ "ftpServerTree.cgi", CHECK_REFERER},
+	{ "aidisk/create_account.asp", CHECK_REFERER},
+#if defined(RTCONFIG_WIRELESSREPEATER) || defined(RTCONFIG_CONCURRENTREPEATER)
+	{ "apscan.asp", CHECK_REFERER},
+#endif
+#ifdef RTCONFIG_QCA_PLC_UTILS
+	{ "plc.cgi", CHECK_REFERER},
+#endif
+	{ "status.asp", CHECK_REFERER},
+	{ "wds_aplist_2g.asp", CHECK_REFERER},
+	{ "wds_aplist_5g.asp", CHECK_REFERER},
+	{ "update_networkmapd.asp", CHECK_REFERER},
+	{ "get_real_ip.asp", CHECK_REFERER},
+	{ "WPS_info.xml", CHECK_REFERER},
+	{ "WPS_info.asp", CHECK_REFERER},
+	{ "login.cgi", CHECK_REFERER},
+	{ "get_webdavInfo.asp", CHECK_REFERER},
+	{ "update_clients.asp", CHECK_REFERER},
 	{ NULL, 0 }
 };
 
@@ -9919,4 +9990,69 @@ void write_encoded_crt(char *name, char *value){
 
 	tmp[i] = '\0';
 	nvram_set(name, tmp);
+}
+
+int check_xxs_blacklist(char* para, int check_www)
+{
+	int i = 0;
+	int file_len;
+	char *query, *para_t;
+	char para_str[256];
+	char filename[128];
+	char url_str[128];
+	memset(filename, 0, sizeof(filename));
+	memset(para_str, 0, sizeof(para_str));
+
+
+	if(para == NULL || !strcmp(para, "")){
+		//_dprintf("check_xxs_blacklist: para is NULL\n");
+		return 1;
+	}
+
+	para_t = strdup(para);
+	while(*para) {
+		//if(*para=='<' || *para=='>' || *para=='%' || *para=='/' || *para=='(' || *para==')' || *para=='&') {
+		if(*para=='<' || *para=='>' || *para=='%' || *para=='(' || *para==')' || *para=='&') {
+			//_dprintf("check_xxs_blacklist: para is Invalid\n");
+			free(para_t);
+			return 1;
+		}
+		else {
+			para_str[i] = tolower(*para);
+			i++;
+			para++;
+		}
+	}
+
+	if(strstr(para_str, "script") || strstr(para_str, "//") ){
+		//_dprintf("check_xxs_blacklist: para include script\n");
+		free(para_t);
+		return 1;
+	}
+
+	if(check_www == 1){
+		memset(url_str, 0, sizeof(url_str));
+		if ((query = index(para_t, '?')) != NULL) {
+			file_len = strlen(para_t)-strlen(query);
+
+			if(file_len > sizeof(url_str))
+				file_len = sizeof(url_str);
+
+			strncpy(url_str, para_t, file_len);
+		}
+		else
+		{
+			strncpy(url_str, para_t, sizeof(url_str)-1);
+		}
+
+		snprintf(filename, sizeof(filename), "/www/%s", url_str);
+		if(!check_if_file_exist(filename)){
+			_dprintf("check_xxs_blacklist:%s is not in www\n", url_str);
+			free(para_t);
+			return 1;
+		}
+	}
+
+	free(para_t);
+	return 0;
 }

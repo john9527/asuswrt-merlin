@@ -1,6 +1,8 @@
 
 /*
- * AES256-GCM, based on original code by Romain Dolbeau
+ * AES256-GCM, based on the "Intel Carry-Less Multiplication Instruction and its Usage for Computing
+ * the GCM Mode" paper and reference code, using the aggregated reduction method.
+ * Originally adapted by Romain Dolbeau.
  */
 
 #include <errno.h>
@@ -10,17 +12,22 @@
 
 #include "crypto_aead_aes256gcm.h"
 #include "export.h"
+#include "private/common.h"
+#include "private/sse2_64_32.h"
+#include "randombytes.h"
 #include "runtime.h"
 #include "utils.h"
 
-#if defined(HAVE_WMMINTRIN_H) || \
-    (defined(_MSC_VER) && (defined(_M_X64) || defined(_M_AMD64) || defined(_M_IX86)))
+#if defined(HAVE_TMMINTRIN_H) && defined(HAVE_WMMINTRIN_H)
 
-#pragma GCC target("ssse3")
-#pragma GCC target("aes")
-#pragma GCC target("pclmul")
+# ifdef __GNUC__
+#  pragma GCC target("ssse3")
+#  pragma GCC target("aes")
+#  pragma GCC target("pclmul")
+# endif
 
-#include <immintrin.h>
+#include <tmmintrin.h>
+#include <wmmintrin.h>
 
 #ifndef ENOSYS
 # define ENOSYS ENXIO
@@ -49,68 +56,43 @@ typedef struct context {
 } context;
 
 static inline void
-aesni_key256_expand(const unsigned char *key, __m128 *rkeys)
+aesni_key256_expand(const unsigned char *key, __m128i * const rkeys)
 {
-    __m128 key0 = _mm_loadu_ps((const float *) (key + 0));
-    __m128 key1 = _mm_loadu_ps((const float *) (key + 16));
-    __m128 temp0, temp1, temp2, temp4;
-    int    idx = 0;
+    __m128i  X0, X1, X2, X3;
+    int      i = 0;
 
-    rkeys[idx++] = key0;
-    temp0 = key0;
-    temp2 = key1;
-    temp4 = _mm_setzero_ps();
+    X0 = _mm_loadu_si128((const __m128i *) &key[0]);
+    rkeys[i++] = X0;
 
-/* why single precision floating-point rather than integer instructions ?
-     because _mm_shuffle_ps takes two inputs, while _mm_shuffle_epi32 only
-     takes one - it doesn't perform the same computation...
-     _mm_shuffle_ps takes the lower 64 bits of the result from the first
-     operand, and the higher 64 bits of the result from the second operand
-     (in both cases, all four input floats are accessible).
-     I don't like the non-orthogonal naming scheme :-(
+    X2 = _mm_loadu_si128((const __m128i *) &key[16]);
+    rkeys[i++] = X2;
 
-     This is all strongly inspired by the openssl assembly code.
-  */
-#define BLOCK1(IMM)                                                 \
-    temp1 = _mm_castsi128_ps(_mm_aeskeygenassist_si128(_mm_castps_si128(temp2), IMM));\
-    rkeys[idx++] = temp2;                                           \
-    temp4 = _mm_shuffle_ps(temp4, temp0, 0x10);                     \
-    temp0 = _mm_xor_ps(temp0, temp4);                               \
-    temp4 = _mm_shuffle_ps(temp4, temp0, 0x8c);                     \
-    temp0 = _mm_xor_ps(temp0, temp4);                               \
-    temp1 = _mm_shuffle_ps(temp1, temp1, 0xff);                     \
-    temp0 = _mm_xor_ps(temp0, temp1)
+#define EXPAND_KEY_1(S) do { \
+    X1 = _mm_shuffle_epi32(_mm_aeskeygenassist_si128(X2, (S)), 0xff); \
+    X3 = _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(X3), _mm_castsi128_ps(X0), 0x10)); \
+    X0 = _mm_xor_si128(X0, X3); \
+    X3 = _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(X3), _mm_castsi128_ps(X0), 0x8c)); \
+    X0 = _mm_xor_si128(_mm_xor_si128(X0, X3), X1); \
+    rkeys[i++] = X0; \
+} while (0)
 
-#define BLOCK2(IMM)                                                 \
-    temp1 = _mm_castsi128_ps(_mm_aeskeygenassist_si128(_mm_castps_si128(temp0), IMM));\
-    rkeys[idx++] = temp0;                                           \
-    temp4 = _mm_shuffle_ps(temp4, temp2, 0x10);                     \
-    temp2 = _mm_xor_ps(temp2, temp4);                               \
-    temp4 = _mm_shuffle_ps(temp4, temp2, 0x8c);                     \
-    temp2 = _mm_xor_ps(temp2, temp4);                               \
-    temp1 = _mm_shuffle_ps(temp1, temp1, 0xaa);                     \
-    temp2 = _mm_xor_ps(temp2, temp1)
+#define EXPAND_KEY_2(S) do { \
+    X1 = _mm_shuffle_epi32(_mm_aeskeygenassist_si128(X0, (S)), 0xaa); \
+    X3 = _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(X3), _mm_castsi128_ps(X2), 0x10)); \
+    X2 = _mm_xor_si128(X2, X3); \
+    X3 = _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(X3), _mm_castsi128_ps(X2), 0x8c)); \
+    X2 = _mm_xor_si128(_mm_xor_si128(X2, X3), X1); \
+    rkeys[i++] = X2; \
+} while (0)
 
-    BLOCK1(0x01);
-    BLOCK2(0x01);
-
-    BLOCK1(0x02);
-    BLOCK2(0x02);
-
-    BLOCK1(0x04);
-    BLOCK2(0x04);
-
-    BLOCK1(0x08);
-    BLOCK2(0x08);
-
-    BLOCK1(0x10);
-    BLOCK2(0x10);
-
-    BLOCK1(0x20);
-    BLOCK2(0x20);
-
-    BLOCK1(0x40);
-    rkeys[idx++] = temp0;
+    X3 = _mm_setzero_si128();
+    EXPAND_KEY_1(0x01); EXPAND_KEY_2(0x01);
+    EXPAND_KEY_1(0x02); EXPAND_KEY_2(0x02);
+    EXPAND_KEY_1(0x04); EXPAND_KEY_2(0x04);
+    EXPAND_KEY_1(0x08); EXPAND_KEY_2(0x08);
+    EXPAND_KEY_1(0x10); EXPAND_KEY_2(0x10);
+    EXPAND_KEY_1(0x20); EXPAND_KEY_2(0x20);
+    EXPAND_KEY_1(0x40);
 }
 
 /** single, by-the-book AES encryption with AES-NI */
@@ -118,18 +100,27 @@ static inline void
 aesni_encrypt1(unsigned char *out, __m128i nv, const __m128i *rkeys)
 {
     __m128i temp = _mm_xor_si128(nv, rkeys[0]);
-    int     roundctr;
 
-#pragma unroll(13)
-    for (roundctr = 1; roundctr < 14; roundctr++) {
-        temp = _mm_aesenc_si128(temp, rkeys[roundctr]);
-    }
+    temp = _mm_aesenc_si128(temp, rkeys[1]);
+    temp = _mm_aesenc_si128(temp, rkeys[2]);
+    temp = _mm_aesenc_si128(temp, rkeys[3]);
+    temp = _mm_aesenc_si128(temp, rkeys[4]);
+    temp = _mm_aesenc_si128(temp, rkeys[5]);
+    temp = _mm_aesenc_si128(temp, rkeys[6]);
+    temp = _mm_aesenc_si128(temp, rkeys[7]);
+    temp = _mm_aesenc_si128(temp, rkeys[8]);
+    temp = _mm_aesenc_si128(temp, rkeys[9]);
+    temp = _mm_aesenc_si128(temp, rkeys[10]);
+    temp = _mm_aesenc_si128(temp, rkeys[11]);
+    temp = _mm_aesenc_si128(temp, rkeys[12]);
+    temp = _mm_aesenc_si128(temp, rkeys[13]);
+
     temp = _mm_aesenclast_si128(temp, rkeys[14]);
     _mm_storeu_si128((__m128i *) out, temp);
 }
 
 /** multiple-blocks-at-once AES encryption with AES-NI ;
-    on Haswell, aesenc as a latency of 7 and a throughput of 1
+    on Haswell, aesenc has a latency of 7 and a throughput of 1
     so the sequence of aesenc should be bubble-free if you
     have at least 8 blocks. Let's build an arbitratry-sized
     function */
@@ -269,7 +260,7 @@ addmul(unsigned char *c, const unsigned char *a, unsigned int xlen, const unsign
     _mm_storeu_si128((__m128i *) c, tmp21);
 }
 
-/* pure multiplication, for pre-computing  powers of H */
+/* pure multiplication, for pre-computing powers of H */
 static inline __m128i
 mulv(__m128i A, __m128i B)
 {
@@ -328,19 +319,19 @@ mulv(__m128i A, __m128i B)
     tmp##a##B = _mm_xor_si128(tmp##a##B, X##a); \
     tmp##a = _mm_clmulepi64_si128(tmp##a, tmp##a##B, 0x00)
 
-#define REDUCE4(rev, H0_, H1_, H2_, H3_, X0_, X1_, X2_, X3_, accv) \
+#define MULREDUCE4(rev, H0_, H1_, H2_, H3_, X0_, X1_, X2_, X3_, accv) \
 do { \
     MAKE4(RED_DECL); \
-    __m128i       lo, hi; \
-    __m128i       tmp8, tmp9; \
-    __m128i       H0 = H0_; \
-    __m128i       H1 = H1_; \
-    __m128i       H2 = H2_; \
-    __m128i       H3 = H3_; \
-    __m128i       X0 = X0_; \
-    __m128i       X1 = X1_; \
-    __m128i       X2 = X2_; \
-    __m128i       X3 = X3_; \
+    __m128i lo, hi; \
+    __m128i tmp8, tmp9; \
+    __m128i H0 = H0_; \
+    __m128i H1 = H1_; \
+    __m128i H2 = H2_; \
+    __m128i H3 = H3_; \
+    __m128i X0 = X0_; \
+    __m128i X1 = X1_; \
+    __m128i X2 = X2_; \
+    __m128i X3 = X3_; \
 \
 /* byte-revert the inputs & xor the first one into the accumulator */ \
 \
@@ -449,8 +440,8 @@ do { \
     MAKE8(XORx); \
     MAKE8(STOREx); \
     accv_ = _mm_load_si128((const __m128i *) accum); \
-    REDUCE4(rev, hv, h2v, h3v, h4v, temp3, temp2, temp1, temp0, accv_); \
-    REDUCE4(rev, hv, h2v, h3v, h4v, temp7, temp6, temp5, temp4, accv_); \
+    MULREDUCE4(rev, hv, h2v, h3v, h4v, temp3, temp2, temp1, temp0, accv_); \
+    MULREDUCE4(rev, hv, h2v, h3v, h4v, temp7, temp6, temp5, temp4, accv_); \
     _mm_store_si128((__m128i *) accum, accv_); \
 } while(0)
 
@@ -466,8 +457,8 @@ do { \
     \
     MAKE8(LOADx); \
     accv_ = _mm_load_si128((const __m128i *) accum); \
-    REDUCE4(rev, hv, h2v, h3v, h4v, in3, in2, in1, in0, accv_); \
-    REDUCE4(rev, hv, h2v, h3v, h4v, in7, in6, in5, in4, accv_); \
+    MULREDUCE4(rev, hv, h2v, h3v, h4v, in3, in2, in1, in0, accv_); \
+    MULREDUCE4(rev, hv, h2v, h3v, h4v, in7, in6, in5, in4, accv_); \
     _mm_store_si128((__m128i *) accum, accv_); \
 } while(0)
 
@@ -501,8 +492,8 @@ crypto_aead_aes256gcm_beforenm(crypto_aead_aes256gcm_state *ctx_,
     __m128i        zero = _mm_setzero_si128();
     unsigned char *H = ctx->H;
 
-    (void) sizeof(int[(sizeof *ctx_) >= (sizeof *ctx) ? 1 : -1]);
-    aesni_key256_expand(k, (__m128 *) rkeys);
+    COMPILER_ASSERT((sizeof *ctx_) >= (sizeof *ctx));
+    aesni_key256_expand(k, rkeys);
     aesni_encrypt1(H, zero, rkeys);
 
     return 0;
@@ -553,13 +544,13 @@ crypto_aead_aes256gcm_encrypt_detached_afternm(unsigned char *c,
     H4v = mulv(H3v, Hv);
 
     accv = _mm_setzero_si128();
-    /* unrolled by 4 GCM (by 8 doesn't improve using REDUCE4) */
+    /* unrolled by 4 GCM (by 8 doesn't improve using MULREDUCE4) */
     for (i = 0; i < adlen_rnd64; i += 64) {
         __m128i X4_ = _mm_loadu_si128((const __m128i *) (ad + i + 0));
         __m128i X3_ = _mm_loadu_si128((const __m128i *) (ad + i + 16));
         __m128i X2_ = _mm_loadu_si128((const __m128i *) (ad + i + 32));
         __m128i X1_ = _mm_loadu_si128((const __m128i *) (ad + i + 48));
-        REDUCE4(rev, Hv, H2v, H3v, H4v, X1_, X2_, X3_, X4_, accv);
+        MULREDUCE4(rev, Hv, H2v, H3v, H4v, X1_, X2_, X3_, X4_, accv);
     }
     _mm_store_si128((__m128i *) accum, accv);
 
@@ -584,7 +575,7 @@ crypto_aead_aes256gcm_encrypt_detached_afternm(unsigned char *c,
         }                                                                                            \
     } while(0)
 
-/* remainder loop, with the slower GCM update to accomodate partial blocks */
+/* remainder loop, with the slower GCM update to accommodate partial blocks */
 #define LOOPRMD128                                           \
     do {                                                     \
         const int iter = 8;                                  \
@@ -700,7 +691,7 @@ crypto_aead_aes256gcm_decrypt_detached_afternm(unsigned char *m, unsigned char *
         __m128i X3_ = _mm_loadu_si128((const __m128i *) (ad + i + 16));
         __m128i X2_ = _mm_loadu_si128((const __m128i *) (ad + i + 32));
         __m128i X1_ = _mm_loadu_si128((const __m128i *) (ad + i + 48));
-        REDUCE4(rev, Hv, H2v, H3v, H4v, X1_, X2_, X3_, X4_, accv);
+        MULREDUCE4(rev, Hv, H2v, H3v, H4v, X1_, X2_, X3_, X4_, accv);
     }
     _mm_store_si128((__m128i *) accum, accv);
 
@@ -787,8 +778,13 @@ crypto_aead_aes256gcm_decrypt_detached_afternm(unsigned char *m, unsigned char *
             d |= (mac[i] ^ (T[i] ^ accum[15 - i]));
         }
         if (d != 0) {
-            memset(m, 0, mlen);
+            if (m != NULL) {
+                memset(m, 0, mlen);
+            }
             return -1;
+        }
+        if (m == NULL) {
+            return 0;
         }
     }
     n2[3] = 0U;
@@ -1059,4 +1055,10 @@ size_t
 crypto_aead_aes256gcm_statebytes(void)
 {
     return (sizeof(crypto_aead_aes256gcm_state) + (size_t) 15U) & ~(size_t) 15U;
+}
+
+void
+crypto_aead_aes256gcm_keygen(unsigned char k[crypto_aead_aes256gcm_KEYBYTES])
+{
+    randombytes_buf(k, crypto_aead_aes256gcm_KEYBYTES);
 }

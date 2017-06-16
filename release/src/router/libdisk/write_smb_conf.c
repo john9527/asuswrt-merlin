@@ -726,6 +726,7 @@ int main(int argc, char *argv[])
 confpage:
 	if(fp != NULL) {
 
+	    if (nvram_match("jffs2_scripts", "1")) {
 		if (check_if_file_exist("/jffs/configs/smb.conf.add")) {
 			char *addendum = read_whole_file("/jffs/configs/smb.conf.add");
 			if (addendum) {
@@ -743,6 +744,7 @@ confpage:
 		if (check_if_file_exist("/jffs/scripts/smb.postconf")) {
 			eval("/jffs/scripts/smb.postconf", SAMBA_CONF);
 		}
+	    }
 	}
 
 	free_disk_data(&disks_info);

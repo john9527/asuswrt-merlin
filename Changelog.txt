@@ -4,6 +4,108 @@ NOTE: [*] Indicated fork unique change
 
 Changelog
 ---------
+374.43_2-25E7j9527  (15-June-2017)
+* CHANGED: webui: change IPTV action_script to restart_wan_if if ipv6 is enabled
+* CHANGED: watchdog: changes to support httpd_check with CVE-2017-5892
+* CHANGED: radvd: add lan domain advertisement
+* CHANGED: kernel: suppress packet with own address log (expected in router environments)
+* CHANGED: services: open invokelater to non-usb services and call for httpd start
+* FIXED: dhcp6s: fix dhcp6s config errors when using stateful ipv6
+* FIXED: webui: ipv6 radvd mtu option incorrectly hidden when disabled
+* FIXED: network: bridge multicast snooping option is not valid on mips routers
+* FIXED: httpd: additional changes for CVE-2017-5892 port
+* FIXED: dnsmasq: remove unneccessary/incorrect ipv6 options
+* FIXED: webui: fix QIS wizard to preserve http password
+* FIXED: httpd: allow time in non-router mode for dhcp address to be set
+
+
+374.43_2-25E6j9527  (6-June-2017)
+* CHANGED: httpd: only add router.asus.com to cert if running in router mode
+* CHANGED: watchdog: restrict extended httpd checks to ARM, router mode only
+* CHANGED: kernel: only log suppressed messages warning on MIPS if count exceeds burst limit
+* CHANGED: kernel: change packet with own address log from warning to debug
+* CHANGED: openvpn: remove persist-tun from default client configuration
+- FIXED: openvpn: (backport) if initialization completes, ignore any errno from a previous temp conn/auth failure
+* FIXED: httpd: improve CVE-2017-5892 port
+* FIXED: webui: fix banner ssid display when in mediabridge mode
+* FIXED: wl: add default acs_dfs for all bcmwl6 routers
+* FIXED: services: fix miniupnpd restart test 75e305f9
+* FIXED: openvpn: clean up extra line after commit 23a68e3
+
+
+374.43_2-25T5j9527  (3-June-2017)
+* FIXED: Revert "samba36: work around bug in validating interfaces config"
+* FIXED: samba: force samba to be invoked again later if lan is not yet up
+* FIXED: samba: respect jffs2_scripts for samba
+* FIXED: rstate: fix incorrect nvram var for checking lan_state
+
+374.43_2-25T4j9527  (31-May-2017)
+- FIXED: samba-3.5.8: patch against CVE-2017-7494 (Samba version used by AiDisk, unsure if it was vulnerable to this)
+* FIXED: webui: only show wan uptime syslog when in router mode
+* FIXED: samba36: work around bug in validating interfaces config
+* FIXED: httpd: fix missing set_referer_host from CVE-2017-5892 port
+* FIXED: webui: fix http/https options when no in router mode
+* FIXED: samba36: work around bug in validating interfaces config
+
+
+374.43_2-25T3j9527  (28-May-2017)
+* CHANGED: Revert "dnsmasq: update to 2.77rc3"
+* CHANGED: dnsmasq: mark as 2.76 forked version
+* CHANGED: services: start dnscrypt before dnsmasq to allow for large host file processing
+* FIXED: dnsmasq: (upstream) when forwarding a query to a non-DNSSEC nameserver, don't verify the lack of DNSSEC
+* FIXED: dnsmasq: (upstream) improve connection handling when talking to TCP upsteam servers
+* FIXED: dnsmasq: (upstream) fix rrfilter bug leading to malformed replies
+* FIXED: dnsmasq: (upstream) Bump TCP connection backlog from 5 to 32
+* FIXED: dnsmasq: (upstream) fix problem with --dnssec-timestamp whereby receipt of SIGHUP would erroneously engage timestamp checking
+* FIXED: dnsmasq: (upstream) stop treating SERVFAIL as a successful response from upstream servers
+* FIXED: dnsmasq: (upstream) fix getsockname error return check
+* FIXED: dnsmasq: (upstream) log ipset errors
+* FIXED: dnsmasq: (upstream) don't reset packet length on transmission, in case of retransmission
+
+
+374.43_2-25E1j9527  (15-May-2017)
+* NEW: haveged: add support version 1.9.1
+* NEW: https: support moving https cert to jffs
+* NEW: wl: (experimental) dfs channel support for ac66, ac56, including auto select dfs channels
+* CHANGED: openvpn: update to 2.4.2
+* CHANGED: dnsmasq: update to 2.77rc3
+* CHANGED: libsodium: update to 1.0.12
+* CHANGED: nano: update to 2.8.1
+* CHANGED: haveged: optimize configs for mips vs arm
+* CHANGED: webui: allow 5min for firware upgrade to complete
+* CHANGED: init: extend default reboot time for ARM routers by 20sec
+* CHANGED: webui: remove nvram warning from https save
+* CHANGED: webui: update time in firmware upgrade message
+* CHANGED: openvpn: set persist-tun for all dns configs if not dual-wan, do not set for dual-wan
+* CHANGED: webui: add popup help for IPTV emf/igmp snooping
+- CHANGED: openvpn: (backport) implement importing of reneg-sec parameter from ovpn file
+- CHANGED: webui: (backport) ASUS xxs_blacklist checking
+- CHANGED: network: (backport) disable bridge multicast_snooping by default
+- CHANGED: webui: add bridge multicast option to IPTV page
+- CHANGED: shared: (backport) add string function to escape special chars for use in webui
+- CHANGED: webui: (backport) make cipher and digest checks non case-sensitive on OpenVPN client
+- CHANGED: webui: add connecting state on vpn status page
+- FIXED: webui: (backport) ASUS fix for CVE-2017-5891, CVE-2017-5892
+- FIXED: webui: (backport) fix variable reuse which was breaking support for multi-partition USB disks
+- FIXED: shared: (backport) ensure that get_parsed_crt() always initializes the buffer
+- FIXED: openvpn: (backport) prevent potential out-of-bound buffer access on key/certs
+- FIXED: webui: (backport) fix variable reuse which was breaking support for multi-partition USB disks
+- FIXED: mssl: (backport) disable all 3DES ciphers
+- FIXED: services: (backport) only restart upnpd with nasapps if already started
+- FIXED: firewall: (backport) only restart upnpd if already active
+
+
+374.43_2-24E4j9527  (24-April-2017)
+* CHANGED: usb: remove old minidlna dbdir if set to new location
+* CHANGED: usb: only use default of /tmp/mnt for media dir if no dirs specified
+* FIXED: usb: fix potential buffer overruns in minidlna start
+* FIXED: usb: fix dbdir discovery for minidlna
+
+
+374.43_2-24E3j9527  (22-April-2017)
+- CHANGED: httpd: update https cert to include SAN extensions for chrome 58
+
+
 374.43_2-24E2j9527  (17-April-2017)
 * NEW: utils: add utilities to move certs between jffs and nvram
 * NEW: kernel: add exFAT support (Tomato backport)

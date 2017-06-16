@@ -23,8 +23,8 @@ if "%1" == "Debug"   ( goto :Debug )
 echo "Invalid build type"
 goto :END
 :ReleaseDLL
-	SET CFLAGS=%CFLAGS% /MD /Ox
-	SET PATH=..\..\Build\%1\%ARCH%;%PATH%
+	SET CFLAGS=%CFLAGS% /MD /Ox 
+	SET PATH=..\..\Build\%1\%ARCH%;%PATH% 
 	goto :COMPILE
 :Release
 	SET CFLAGS=%CFLAGS% /MT /Ox /DSODIUM_STATIC /DSODIUM_EXPORT=
@@ -45,12 +45,12 @@ FOR %%f in (*.c) DO (
 		goto :END
 	)
 	%%f.exe
-	if errorlevel 1 (
+	if errorlevel 1 ( 
 		echo %%f failed
 	) else (
 		echo %%f ok
 	)
 )
 REM Remove temporary files
-del *.exe *.obj *.res
+del *.exe *.obj *.res 
 :END

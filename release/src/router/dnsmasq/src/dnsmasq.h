@@ -482,6 +482,7 @@ union mysockaddr {
 #define SERV_FROM_FILE      4096  /* read from --servers-file */
 #define SERV_LOOP           8192  /* server causes forwarding loop */
 #define SERV_DO_DNSSEC     16384  /* Validate DNSSEC when using this server */
+#define SERV_GOT_TCP       32768  /* Got some data from the TCP connection */
 
 struct serverfd {
   int fd;
@@ -992,6 +993,7 @@ extern struct daemon {
 #endif
 #ifdef HAVE_DNSSEC
   struct ds_config *ds;
+  int dnssec_no_time_check;
   int back_to_the_future;
   char *timestamp_file;
 #endif

@@ -2002,6 +2002,14 @@ start_samba(void)
 		return;
 	}
 
+	if (!is_lan_connected()) {
+		set_invoke_later(INVOKELATER_SMB);
+		logmessage("Samba Server", "start deferred by lan state");
+		return;
+	}
+	else
+		clear_invoke_later(INVOKELATER_SMB);
+
 	if ((nvram_match("enable_samba", "0")) &&
 	    (nvram_match("smbd_master", "0")) &&
 	    (nvram_match("smbd_wins", "0"))) {
@@ -2097,7 +2105,7 @@ void stop_samba(void)
 	/* clean up */
 	unlink("/var/log/smb");
 	unlink("/var/log/nmb");
-
+	clear_invoke_later(INVOKELATER_SMB);
 	eval("rm", "-rf", "/var/run/samba");
 
 	logmessage("Samba Server", "smb daemon is stopped");
@@ -2168,10 +2176,10 @@ void find_dms_dbdir(char *dbdir)
 	char dbdir_t[128], dbfile[128];
 	int found=0;
 
-  	strcpy(dbdir_t, nvram_safe_get("dms_dbdir"));
+	strlcpy(dbdir_t, nvram_safe_get("dms_dbdir"), sizeof(dbdir_t));
 
 	/* if previous dms_dbdir there, use it */
-	if(!strcmp(dbdir_t, nvram_default_get("dms_dbdir"))) {
+	if(strcmp(dbdir_t, nvram_default_get("dms_dbdir"))) {
 		sprintf(dbfile, "%s/file.db", dbdir_t);
 		if (check_if_file_exist(dbfile)) {
 			strcpy(dbdir, dbdir_t);
@@ -2187,7 +2195,7 @@ void find_dms_dbdir(char *dbdir)
 
  	/* use default dir */
 	if(!found)
-		strcpy(dbdir, nvram_default_get("dms_dbdir"));
+		strlcpy(dbdir, nvram_default_get("dms_dbdir"), sizeof(dbdir_t));
 
 	nvram_set("dms_dbdir", dbdir);
 
@@ -2203,7 +2211,7 @@ void start_dms(void)
 {
 	FILE *f;
 	int port, pid;
-	char dbdir[100], *dmsdir;
+	char dbdir[128], dbdir_last[128], *dmsdir;
 	char *argv[] = { MEDIA_SERVER_APP, "-f", "/etc/"MEDIA_SERVER_APP".conf", "-R", NULL };
 	static int once = 1;
 	int i, j;
@@ -2222,8 +2230,13 @@ void start_dms(void)
 		return;
 	}
 
-	if (!is_routing_enabled() && !is_lan_connected())
+	if (!is_routing_enabled() && !is_lan_connected()) {
 		set_invoke_later(INVOKELATER_DMS);
+		logmessage("MediaServer", "start deferred by lan state");
+		return;
+	}
+	else
+		clear_invoke_later(INVOKELATER_DMS);
 
 	if (nvram_get_int("dms_sas") == 0)
 		once = 0;
@@ -2248,8 +2261,10 @@ void start_dms(void)
 				while ((b = strsep(&nvp, "<")) != NULL) {
 					if (!strlen(b)) continue;
 
-					if (default_dms_dir_used && !strcmp(b, nvram_default_get("dms_dir")))
+					if (default_dms_dir_used && !strcmp(b, nvram_default_get("dms_dir"))) {
 						strncpy(dirlist[dircount++], b, 1024);
+						continue;
+					}
 
 					if (check_if_dir_exist(b)) {
 						strncpy(dirlist[dircount++], b, 1024);
@@ -2288,6 +2303,7 @@ void start_dms(void)
 			if (nv) free(nv);
 			if (nv2) free(nv2);
 
+			strlcpy(dbdir_last, nvram_safe_get("dms_dbdir"), sizeof(dbdir_last));
 			if (default_dms_dir_used) {
 				find_dms_dbdir(dbdir);
 			}
@@ -2309,8 +2325,14 @@ void start_dms(void)
 			if (strlen(dbdir))
 				mkdir_if_none(dbdir);
 			if (!check_if_dir_exist(dbdir)) {
-				strcpy(dbdir, nvram_default_get("dms_dbdir"));
+				strlcpy(dbdir, nvram_default_get("dms_dbdir"), sizeof(dbdir));
 				mkdir_if_none(dbdir);
+			} else
+				nvram_set("dms_dbdir", dbdir);
+
+			if (strcmp(dbdir, dbdir_last))	{	//remove old dbdir
+				if (check_if_dir_exist(dbdir_last))
+					eval("rm", "-rf", dbdir_last);
 			}
 
 			nvram_set("dms_dbcwd", dbdir);
@@ -2374,10 +2396,13 @@ void start_dms(void)
 				}
 			}
 
-			if (!sharecount)
-			fprintf(f,
-				"media_dir=%s\n",
-				nvram_default_get("dms_dir"));
+			if (!sharecount) {
+				if (strlen(nvram_safe_get("dms_dir_x")))
+					fprintf(f, "media_dir=/Media\n");	//use linux default media dir if other is defined and not available
+				else
+					fprintf(f, "media_dir=%s\n",
+						nvram_default_get("dms_dir"));	//use default with no media dirs defined
+			}
 
 			fprintf(f,
 				"serial=%s\n"
@@ -2434,6 +2459,7 @@ void stop_dms(void)
 void force_stop_dms(void)
 {
 	killall_tk(MEDIA_SERVER_APP);
+	clear_invoke_later(INVOKELATER_DMS);
 	logmessage("MediaServer", "daemon is stopped");
 }
 

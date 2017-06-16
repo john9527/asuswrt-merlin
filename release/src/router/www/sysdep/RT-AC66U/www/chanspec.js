@@ -307,6 +307,8 @@ function wlextchannel_fourty(v){
 	return v;
 }
 
+var wl1_dfs = '<% nvram_get("wl1_dfs"); %>';
+var wl_dfs_enable = '<% nvram_get("wl_dfs_enable"); %>';
 function change_channel(obj){
 	var extend_channel = new Array();
 	var extend_channel_value = new Array();
@@ -360,7 +362,11 @@ function change_channel(obj){
 	}
 	
 	if(country == "EU"){		// for DFS channel
-		if((based_modelid == "RT-AC68U" || based_modelid == "RT-AC68U_V2" || based_modelid == "RT-AC69U" || based_modelid == "DSL-AC68U" || based_modelid == "RT-AC87U")){
+		if(based_modelid == "RT-AC68U" || based_modelid == "RT-AC68U_V2" || based_modelid == "RT-AC69U" || based_modelid == "DSL-AC68U"
+		|| based_modelid == "RT-AC87U"
+		|| (based_modelid == "RT-AC56U" && wl_dfs_enable == "1")
+		|| (based_modelid == "RT-AC66U" && wl1_dfs == "1" && wl_dfs_enable == "1")
+		|| (based_modelid == "RT-N66U" && wl_dfs_enable == "1")){
 			if(document.form.wl_channel.value  == 0){
 				$('dfs_checkbox').style.display = "";
 				document.form.acs_dfs.disabled = false;

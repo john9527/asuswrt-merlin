@@ -347,7 +347,7 @@ entropy_check(void)
     int c;
 
     if ((fd = open("/dev/random", O_RDONLY)) != -1) {
-        if (ioctl(fd, RNDGETENTCNT, &c) == 0 && c < 120) {
+        if (ioctl(fd, RNDGETENTCNT, &c) == 0 && c < 160) {
             logger(NULL, LOG_WARNING,
                    "This system doesn't provide enough entropy to quickly generate high-quality random numbers");
             logger(NULL, LOG_WARNING,

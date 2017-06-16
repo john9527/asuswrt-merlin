@@ -458,7 +458,7 @@ function show_banner(L3){// L3 = The third Level of Menu
 	banner_code +='<div style="display:inline;float:right;font-size:11px;"<span style="font-family:Verdana, Arial, Helvetica, sans-serif;font-size:11px;">Firmware:</span><a href="/Advanced_FirmwareUpgrade_Content.asp" style="color:white;"><span id="firmver" class="title_link"></span></a></div><br />\n';
 	banner_code +='<span style="font-family:Verdana, Arial, Helvetica, sans-serif;font-size:11px;" id="ssidTitle">SSID:&nbsp;&nbsp;(2.4GHz)</span>';
 	banner_code +='<span onclick="change_wl_unit_status(0)" id="elliptic_ssid_2g" class="title_link"></span>';
-	banner_code +='<span style="font-family:Verdana, Arial, Helvetica, sans-serif;font-size:11px;" id="ssidTitle">(5GHz)</span>';
+	banner_code +='<span style="font-family:Verdana, Arial, Helvetica, sans-serif;font-size:11px;" id="ssidTitle1">(5GHz)</span>';
 	banner_code +='<span onclick="change_wl_unit_status(1)" id="elliptic_ssid_5g" class="title_link"></span><div style="display:inline;float:right;font-size:10px;">(Merlin LTS fork)</div>\n';
 	banner_code +='</td>\n';
 
@@ -1493,9 +1493,11 @@ var mouseClick = function(){
 }
 
 function show_top_status(){
+	/*
 	if(!localAP_support){
 		document.getElementById("ssidTitle").style.display = "none";
 	}
+	*/
 
 	var ssid_status_2g =  decodeURIComponent('<% nvram_char_to_ascii("WLANConfig11b", "wl0_ssid"); %>');
 	var ssid_status_5g =  decodeURIComponent('<% nvram_char_to_ascii("WLANConfig11b", "wl1_ssid"); %>');
@@ -1508,11 +1510,16 @@ function show_top_status(){
 
 	if(sw_mode == 4){
 		if('<% nvram_get("wlc_band"); %>' == '0'){
-			$("elliptic_ssid_2g").style.display = "none";
-			$("elliptic_ssid_5g").style.marginLeft = "";
-		}
-		else
+			$("elliptic_ssid_2g").style.display = "";
 			$("elliptic_ssid_5g").style.display = "none";
+			//$("elliptic_ssid_5g").style.marginLeft = "";
+			$("ssidTitle1").style.display = "none";
+		}
+		else {
+			$("elliptic_ssid_2g").style.display = "none";
+			$("elliptic_ssid_5g").style.display = "";
+			$("ssidTitle").innerHTML = "SSID:&nbsp;&nbsp;";
+		}
 
 		$('elliptic_ssid_2g').style.textDecoration="none";
 		$('elliptic_ssid_2g').style.cursor="auto";

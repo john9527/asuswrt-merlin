@@ -44,6 +44,8 @@ endif
 	install -m 0700 -D sshd2jffs $(INSTALLDIR)/usr/sbin
 	install -m 0700 -D ovpn2nvram $(INSTALLDIR)/usr/sbin
 	install -m 0700 -D ovpn2jffs $(INSTALLDIR)/usr/sbin
+	install -m 0700 -D https2nvram $(INSTALLDIR)/usr/sbin
+	install -m 0700 -D https2jffs $(INSTALLDIR)/usr/sbin
 
 # Easy-rsa scripts (for OpenVPN)
 ifeq ($(RTCONFIG_OPENVPN),y)

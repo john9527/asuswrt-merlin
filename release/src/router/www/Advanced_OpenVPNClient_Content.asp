@@ -228,14 +228,14 @@ function initial()
 	// Cipher list
 	free_options(document.form.vpn_client_cipher);
 	currentcipher = "<% nvram_get("vpn_client_cipher"); %>";
-	add_option(document.form.vpn_client_cipher, "Default","default",(currentcipher == "default"));
-	add_option(document.form.vpn_client_cipher, "None","none",(currentcipher == "none"));
+	add_option(document.form.vpn_client_cipher, "Default","default",(currentcipher.toLowerCase() == "default"));
+	add_option(document.form.vpn_client_cipher, "None","none",(currentcipher.toLowerCase() == "none"));
 
 	// Digest list
 	free_options(document.form.vpn_client_digest);
 	currentdigest = "<% nvram_get("vpn_client_digest"); %>";
-	add_option(document.form.vpn_client_digest, "Default","default",(currentdigest == "default"));
-	add_option(document.form.vpn_client_digest, "None","none",(currentdigest == "none"));
+	add_option(document.form.vpn_client_digest, "Default","default",(currentdigest.toLowerCase() == "default"));
+	add_option(document.form.vpn_client_digest, "None","none",(currentdigest.toLowerCase() == "none"));
 
 	// Extract the type out of the interface name 
 	// (imported ovpn can result in this being tun3, for example)
@@ -246,13 +246,13 @@ function initial()
 	for(var i = 0; i < ciphersarray.length; i++){
 		add_option(document.form.vpn_client_cipher,
 			ciphersarray[i][0], ciphersarray[i][0],
-			(currentcipher == ciphersarray[i][0]));
+			(currentcipher.toLowerCase() == ciphersarray[i][0].toLowerCase()));
 	}
 
 	for(var i = 0; i < digestsarray.length; i++){
 		add_option(document.form.vpn_client_digest,
 			digestsarray[i][0], digestsarray[i][0],
-			(currentdigest == digestsarray[i][0]));
+			(currentdigest.toLowerCase() == digestsarray[i][0].toLowerCase()));
 	}
 
 	// Set these based on a compound field

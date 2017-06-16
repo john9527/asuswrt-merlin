@@ -232,8 +232,8 @@ function isDownloading(){
 						}
 						else{		// start upgrading
 								$("hiddenMask").style.visibility = "hidden";
-								showLoadingBar(270);
-								setTimeout("detect_httpd();", 272000);
+								showLoadingBar(300);
+								setTimeout("detect_httpd();", 302000);
 								return false;
 						}
 						

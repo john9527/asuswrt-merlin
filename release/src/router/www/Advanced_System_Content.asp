@@ -153,16 +153,33 @@ function initial(){
 		document.form.misc_http_x.disabled = true;
 		document.form.misc_httpsport_x.disabled = true;
 		document.form.misc_httpport_x.disabled = true;
+		$("http_access_page").style.display = "none";
+		$("https_access_page").style.display = "none";
 	}
 	else
 		hideport(document.form.misc_http_x[0].checked);
-	
-	if(!HTTPS_support || '<% nvram_get("http_enable"); %>' == 0){
-		$("https_port").style.display = "none";
+
+	var http_option = '<% nvram_get("http_enable"); %>';	
+	if(!HTTPS_support || http_option == 0){
+		$("http_lanport").style.display = "";
+		$("https_lanport").style.display = "none";
 		$("https_cert").style.display = "none";
 	}
-	else if('<% nvram_get("http_enable"); %>' == 1)
-		$("http_port").style.display = "none";
+	else if(http_option == 1){
+		$("http_lanport").style.display = "none";
+		$("https_lanport").style.display = "";
+		$("https_cert").style.display = "";
+	}
+	else if(http_option == 2){
+		$("http_lanport").style.display = "";
+		$("https_lanport").style.display = "";
+		$("https_cert").style.display = "";
+	}
+	else {
+		$("http_lanport").style.display = "";
+		$("https_lanport").style.display = "none";
+		$("https_cert").style.display = "none";
+	}
 
 	document.form.http_username.value= accounts[0];
 	document.form.sshd_authkeys.value = document.form.sshd_authkeys.value.replace(/>/gm,"\r\n");
@@ -774,35 +791,35 @@ function update_jffs2_msg(){
 	$("jffs_script_msg").style.display = (document.form.jffs2_on[0].checked) ? "none" : ((document.form.jffs2_scripts[0].checked) ? "" : "none");
 }
 
-function hide_http_lanport(_value){
-	if(sw_mode == '1' || sw_mode == '2'){
-		var http_lanport_num = "<% nvram_get("http_lanport"); %>";
-		var http_lanport_num_new = (http_lanport_num == "80") ? "" : http_lanport_num;
-		var port_sep = (http_lanport_num == "80") ? "" : ":";
-		$("http_lanport").style.display = (_value == "1") ? "none" : "";
-		document.form.http_lanport.value = "<% nvram_get("http_lanport"); %>";
+function hide_http_lanport(_value){	
+	var http_lanport_num = "<% nvram_get("http_lanport"); %>";
+	var http_lanport_num_new = (http_lanport_num == "80") ? "" : http_lanport_num;
+	var port_sep = (http_lanport_num == "80") ? "" : ":";
+	$("http_lanport").style.display = (_value == "1") ? "none" : "";
+	document.form.http_lanport.value = "<% nvram_get("http_lanport"); %>";
+	if(sw_mode == '1'){
 		$("http_access_page").innerHTML = "<#https_access_url#> ";
 		$("http_access_page").innerHTML += "<a href=\"http://"+theUrl+port_sep+http_lanport_num_new+"\" target=\"_blank\" style=\"color:#FC0;text-decoration: underline; font-family:Lucida Console;\">http://"+theUrl+"<span>"+port_sep+http_lanport_num_new+"</span></a>";
 		$("http_access_page").style.display = (_value == "1") ? "none" : "";
 	}
 	else{
-		$("http_access_page").style.display = 'none';
+		$("http_access_page").style.display = "none";
 	}
 }
 
 function hide_https_lanport(_value){
-	if(sw_mode == '1' || sw_mode == '2'){
-		var https_lanport_num = "<% nvram_get("https_lanport"); %>";
-		var https_lanport_num_new = https_lanport_num;
-		var port_sep = ":";
-		$("https_lanport").style.display = (_value == "0") ? "none" : "";
-		document.form.https_lanport.value = "<% nvram_get("https_lanport"); %>";
+	var https_lanport_num = "<% nvram_get("https_lanport"); %>";
+	var https_lanport_num_new = https_lanport_num;
+	var port_sep = ":";
+	$("https_lanport").style.display = (_value == "0") ? "none" : "";
+	document.form.https_lanport.value = "<% nvram_get("https_lanport"); %>";
+	if(sw_mode == '1'){
 		$("https_access_page").innerHTML = "<#https_access_url#> ";
 		$("https_access_page").innerHTML += "<a href=\"https://"+theUrl+port_sep+https_lanport_num_new+"\" target=\"_blank\" style=\"color:#FC0;text-decoration: underline; font-family:Lucida Console;\">http<span>s</span>://"+theUrl+"<span>"+port_sep+https_lanport_num_new+"</span></a>";
 		$("https_access_page").style.display = (_value == "0") ? "none" : "";
 	}
 	else{
-		$("https_access_page").style.display = 'none';
+		$("https_access_page").style.display = "none";
 	}
 }
 
@@ -1471,7 +1488,7 @@ function updateDateTime()
 		  	</tr>
 
 			<tr id="https_cert">
-					<th>Save HTTPS certificate<br><i>Requires approx 1KB NVRAM space</i></th>
+					<th>Save HTTPS certificate</th>
 					<td>
 						<input type="radio" name="https_crt_save" class="input" value="1" <% nvram_match_x("", "https_crt_save", "1", "checked"); %>><#checkbox_Yes#>
 						<input type="radio" name="https_crt_save" class="input" value="0" <% nvram_match_x("", "https_crt_save", "0", "checked"); %>><#checkbox_No#>

@@ -458,9 +458,9 @@ struct nvram_tuple router_defaults[] = {
 
 #ifdef RTCONFIG_BCMWL6
 	{ "acs_ifnames", "", 0 },
-#ifdef RTAC68U
+//#ifdef RTAC68U
 	{ "acs_dfs", "0", 0},			/* disable DFS channels for acsd by default */
-#endif
+//#endif
 	{ "acs_band1", "0", 0},
 	{ "wl_wet_tunnel", "0", 0  },		/* Disable wet tunnel */
 
@@ -756,6 +756,10 @@ struct nvram_tuple router_defaults[] = {
 	// miniupnpd - PCP-related values
 	{ "upnp_min_lifetime", "120" },
 	{ "upnp_max_lifetime", "86400" },
+
+#ifdef BCMARM	// miniupnpd, minidlna - bridge multicast option
+	{ "lan_brsnoop", "0" },		// Bridge multicast snooping
+#endif
 
 #ifdef RTCONFIG_DUALWAN // RTCONFIG_DUALWAN
 	{ "wans_mode", "fo" }, 		// off/failover/failback/loadbance(off/fo/fb/lb)
