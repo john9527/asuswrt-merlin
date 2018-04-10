@@ -1551,8 +1551,8 @@ function show_top_status(){
 	var ssid_len_5g = ssid_status_5g.length;
 	var min_ssid_len = Math.min(ssid_len_2g,ssid_len_5g);
 	if (min_ssid_len > 20){
-		ssid_status_2g_e = ssid_status_2g.substring(0,17) + "...";;
-		ssid_status_5g_e = ssid_status_5g.substring(0,17) + "....";
+		ssid_status_2g_e = ssid_status_2g.substring(0,17) + "...";
+		ssid_status_5g_e = ssid_status_5g.substring(0,17) + "...";
 	}
 	else if((ssid_len_2g+ssid_len_5g) > 40){
 		if(ssid_len_2g <= ssid_len_5g)
